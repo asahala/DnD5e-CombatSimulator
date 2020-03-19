@@ -7,152 +7,16 @@ import dice
 import math
 import copy
 from collections import Counter
-from mechanics import Ruleset as R
+from weapons import Weapon
+from abilities import *
+from messages import IO
 
-VERBOSE_LEVEL = 2
 DIVIDER = "=" * 56
-INDENT = " " * 4
-
-class IO:
-
-    turn = 0
-
-    @staticmethod
-    def center_and_pad(string, padding=":"):
-        times = int( (72 - len(string) + 2) / 2 )
-        return "{padding} {string} {padding}".format(padding=padding*times,
-                                                     string=string)
-
-    @staticmethod
-    def printmsg(message, level, indent=False, print_turn=False):
-        if indent:
-            tab = INDENT
-        else:
-            tab = ""
-
-        """ Add punctuation """
-        if message[-1].isalpha():
-            message += "."
-
-        """ Set if turn number is shown in action log """
-        if print_turn:
-            turn = "Turn %i: " % IO.turn
-        else:
-            turn = ""
-
-        if VERBOSE_LEVEL >= level:
-            print(tab + turn + message)
-
-class Actions:
-
-    """ Base class for special creature actions and abilities """
-
-    def __init__(self, name, dc, save, to_hit, recharge=0, **kwargs):
-        self.name = name
-        self.dc = dc
-        self.save = save
-        self.to_hit = to_hit
-        self.recharge = recharge
-        self.available = True
-        super().__init__(**kwargs)
-
-    def __repr__(self):
-        return "%s (DC: %i) " % (self.name, self.dc)
-
-    def check_and_recharge(self):
-        if not self.available:
-            if dice.roll(1, 6, 0) >= self.recharge:
-                self.available = True
-
-
-class Restrain(Actions):
-
-    def use(self, creature, enemy):
-        if creature.roll_hit(self.to_hit, enemy.ac):
-            enemy.set_restrain(True, self.dc, self.save)
-        self.available = False
-
-
-class Gore(Actions):
-
-    def __init__(self, damage, damage_type, **kwargs):
-        super().__init__(**kwargs)
-        self.damage = dice.parse_damage(damage)
-        self.damage_type = damage_type
-
-    def use(self, creature, enemy):
-        if creature.roll_hit(self.to_hit, enemy.ac):
-            #self.apply_damage(self.damage, self.damage_type, enemy)
-            enemy.set_prone(True)
-
-
-spider_web = Restrain(name="Web", dc=11, save='str', to_hit=5, recharge=5)
-minotaur_gore = Gore(name="Gore", dc=14, save='str', to_hit=6, damage=["4d8+4"], damage_type=["piercing"])
-
-
-class Weapon(object):
-
-    def __init__(self, name, damage, damage_type,
-                 reach, to_hit, number_of_targets=1):
-        self.name = name
-        self.damage_print = damage
-        self.damage = dice.parse_damage(damage)
-        self.damage_type = damage_type
-        self.reach = reach
-        self.to_hit = to_hit
-        self.number_of_targets = number_of_targets
-
-    def __repr__(self):
-        dmg = []
-        for i in range(0, len(self.damage)):
-            dmg.append(self.damage_print[i] \
-                  + " (%s)" % self.damage_type[i] \
-                  + " %i ft. reach" % self.reach)
-        return "{name}: {dmg}".format(name=self.name.capitalize(),
-                                     dmg=", ".join(dmg))
-
-    def use(self, source, target):
-        hit, crit_multiplier, hitroll, message \
-            = R.roll_hit(source, target, self.to_hit, self.name)
-        
-        """ Iterate all different damage types in weapon if hit """
-        total_damage = []
-        if hit:
-            for i in range(len(self.damage)):
-                dmg = self.damage[i]
-                dmg_type = self.damage_type[i]
-                """ Store total damage """
-                total_damage.append(
-                    R.roll_damage(source,target, dmg, dmg_type, crit_multiplier))
-
-
-            if target.hp <= -target.max_hp:
-                source.kills += 1
-                msg = ". Target turns into bloody pulp!"
-            elif target.hp <= 0:
-                source.kills += 1
-                msg = ". Target dies!"
-            else:
-                msg = "."
-
-            message += ": does " + " and ".join(total_damage) \
-                       + " damage" + msg + " (%i HP remaining)." % target.hp
-
-        IO.printmsg(message, 2, indent=True, print_turn=True)
-
-wolf_bite = Weapon('bite', ["2d4+2"], ["piercing"], 5, 4)
-owlbear_beak = Weapon('beak', ["1d10+5"], ["piercing"], 5, 7)
-owlbear_claws = Weapon('claws', ["2d8+5"], ["slashing"], 5, 7)
-minotaur_greataxe = Weapon('greataxe', ["2d12+4"], ["slashing"], 5, 6)
-spider_bite = Weapon('bite', ["1d10+2", "4d8"], ["piercing", "poison(DC:con:0.5:11)"], 5, 4)
-nightmare_hooves = Weapon('hooves', ["2d8+4", "2d6"], ["bludgeoning", "fire"], 5, 6)
-greatclub = Weapon('greatclub', ["3d8+6"], ["bludgeoning"], 15, 9)
-
 
 class Basecreature(object):
 
     def __init__(self, name, cr, ac, hp, speed, scores, attacks, actions,
-                 resistances=[], immunities=[]):
+                 passives=[], resistances=[], immunities=[]):
         self.name = name.upper()         # Enumerated name, e.g. ´wolf 3´
         self.type = name                 # Creature base-type, e.g. ´wolf´
         self.cr = cr
@@ -164,6 +28,8 @@ class Basecreature(object):
         self.scores = scores
         self.attacks = attacks
         self.actions = actions
+        self.passives = passives
+        
         self.resistances = resistances
         self.immunities = immunities
 
@@ -194,6 +60,10 @@ class Basecreature(object):
                % (self.name, indentation, self.ac, self.hp,
                   self.initiative, CR.get(self.cr, str(self.cr)), self.speed)
 
+    # ==================================================================
+    # Creature conditions
+    # ==================================================================
+
     @property
     def is_dead(self):
         """ Creature is dead if its HP is 0 or it has any negative
@@ -223,9 +93,9 @@ class Basecreature(object):
         the creature """
         return any([other.is_prone, other.is_restrained, other.is_poisoned])
 
-    @staticmethod
-    def parse_damage_type(damage_type):
-        return re.sub('.*\((.+)\).*',  r'\1', damage_type).split(':')
+    # ==================================================================
+    #
+    # ==================================================================
 
     def get_modifier(self, ability):
         return math.floor((self.scores[ability] - 10) / 2)
@@ -268,9 +138,6 @@ class Basecreature(object):
         self.advantage = False
         self.disadvantage = False
 
-    def _roll_hit(self, bonus, target_ac):
-        return self.roll_d20(bonus) > target_ac
-
     def roll_d20(self, bonus):
         return dice.roll(times=1, sides=20, bonus=bonus)
 
@@ -282,10 +149,6 @@ class Basecreature(object):
         cr = self.cr / 1000
         dex_mod = self.get_modifier('dex')
         self.initiative = self.roll_d20(dex_mod) + dex + cr
-
-    def _roll_damage(self, damage):
-        times, sides, bonus = damage
-        return dice.roll(times, sides, bonus)
 
     def check_resistances(self, damage_type, damage):
         """ Strip save DC info from damage_type """
@@ -303,33 +166,6 @@ class Basecreature(object):
         self.scores[ability_score] -= damage
         ## TODO: Adjust AC, damage and hit
 
-    def _take_damage(self, source, source_party, damage_type, damage):
-        original_dmg = damage
-
-        """ Check if applicable against save """
-        if 'DC' in damage_type:
-            _, ability, multiplier, dc = self.parse_damage_type(damage_type)
-            if self.roll_save(ability) >= int(dc):
-                damage = float(multiplier) * damage
-            else:
-                if damage_type.startswith('poison'):
-                    self.set_disadvantage()
-
-        damage = self.check_resistances(damage_type, damage)
-        resisted = original_dmg - damage
-        if resisted > 0:
-            line = "(resisted %i of %i total damage)" % (resisted, original_dmg)
-        else:
-            line = ""
-
-        IO.printmsg("%s (%s) does %i %s damage to %s %s" % (source.upper(), source_party, damage, damage_type, self.name.upper(), line))
-        self.hp -= damage
-
-        if self.hp <= -self.max_hp:
-            IO.printmsg("%s (%s) explodes into bloody pulp" % (self.name.upper(), self.party))
-        elif self.hp <= 0:
-            IO.printmsg("%s (%s) dies" % (self.name.upper(), self.party))
-
     def set_focus(self, enemies):
         """ Set focus to some enemy and keep it unless the target dies """
         if self.focused_enemy is None:
@@ -337,10 +173,17 @@ class Basecreature(object):
         elif self.focused_enemy.is_dead:
             self.focused_enemy = enemies.get_weakest()
 
+    def check_passives(self, allies, enemies):
+        """ Check passive skills """
+        if self.passives:
+            for passive in self.passives:
+                passive.use(self, allies, enemies)
+
     def perform_action(self, allies, enemies):
         """ General method for performing actions """
         if not self.is_dead:
             self.begin_turn()
+            self.check_passives(allies, enemies)
             self.attack(enemies)
 
     def attack(self, enemies):
@@ -351,32 +194,27 @@ class Basecreature(object):
             if self.focused_enemy is not None:
                 attack.use(self, self.focused_enemy)
 
-        """
-        for attack in self.attacks:
-            enemy = Party.sort_by_value(enemies, 'hp')[0]
-
-            hitroll = self.roll_d20(attack.to_hit)
-            #line1 = "%s (%s) attacks %s with %s" % (self.name.upper(), self.party, enemy.name.upper(), attack.name)
-            if hitroll > enemy.ac:
-                line2 = "Hit"#"Hit: %i vs. AC %i" % (hitroll, enemy.ac)
-                for i in range(len(attack.damage)):
-                    enemy.take_damage(self.name,
-                                      self.party,
-                                      attack.damage_type[i],
-                                      self.roll_damage(attack.damage[i]))
-            else:
-                line2 = "Miss"
-
-                IO.printmsg(line2)"""
 
 
 
+spider_web = Restrain(name="Web", dc=11, save='str', to_hit=5, recharge=5)
+minotaur_gore = Gore(name="Gore", dc=14, save='str', to_hit=6, damage=["4d8+4"], damage_type=["piercing"])
+pack_tactics = PackTactics
+
+wolf_bite = Weapon('bite', ["2d4+2"], ["piercing"], 5, 4)
+owlbear_beak = Weapon('beak', ["1d10+5"], ["piercing"], 5, 7)
+owlbear_claws = Weapon('claws', ["2d8+5"], ["slashing"], 5, 7)
+minotaur_greataxe = Weapon('greataxe', ["2d12+4"], ["slashing"], 5, 6)
+spider_bite = Weapon('bite', ["1d10+2", "4d8"], ["piercing", "poison(DC:con:0.5:11)"], 5, 4)
+nightmare_hooves = Weapon('hooves', ["2d8+4", "2d6"], ["bludgeoning", "fire"], 5, 6)
+greatclub = Weapon('greatclub', ["3d8+6"], ["bludgeoning"], 15, 9)
 
 wolf_ = Basecreature(name='wolf', cr=0.25, ac=13, hp=11, speed=40,
                     scores={'str': 12, 'dex': 15, 'con': 12,
                                'int': 3, 'wis': 12, 'cha': 7},
                     attacks=[wolf_bite],
-                    actions=[])
+                    actions=[],
+                    passives=[pack_tactics])
 
 spider_ = Basecreature(name='spider', cr=0, ac=13, hp=11, speed=40,
                     scores={'str': 12, 'dex': 15, 'con': 12,
@@ -530,6 +368,7 @@ while i < 1:
     print("Match %i" % i)
     team1 = Party(name='Team A')
     team1.add(copy.copy(wolf_))
+    team1.add(copy.copy(wolf_))
 
     team2 = Party(name='Team B')
     team2.add(copy.copy(stone_giant_))
@@ -540,67 +379,3 @@ while i < 1:
 
 print(Counter(results).items())
 
-
-
-"""
-print('\ntoinen kuollut')
-test = Party(name="testi")
-test.add(copy.copy(wolf_))
-print(test.is_alive)
-test.add(copy.copy(dead_))
-print(test.is_alive)
-
-print('\nkumpikin kuollut')
-test2 = Party(name="testi")
-test2.add(copy.copy(dead_))
-print(test.is_alive)
-test2.add(copy.copy(dead_))
-print(test2.is_alive)
-
-print('\nkumpikin elossa')
-test3 = Party(name="testi")
-test3.add(copy.copy(wolf_))
-print(test.is_alive)
-test3.add(copy.copy(wolf_))
-print(test3.is_alive)
-print('\n')
-print(test.is_alive and test2.is_alive, 'toinen kuollut ja kumpikin kuollut')
-print(test.is_alive and test3.is_alive, 'toinen kuollut ja kumpikin elossa')
-print(test.is_alive and test.is_alive, 'toinen kuollut ja toinen kuollut')
-print(test3.is_alive and  test3.is_alive, 'kumpikin elossa ja kumpikin elossa')
-print(test2.is_alive and test2.is_alive, 'kumpikin kuollut ja kumpikin kuollut')
-print(test2.is_alive and test3.is_alive, 'kumpikin kuollut ja kumpikin elossa')
-
-"""
-
-
-'''
-dwolf = 0
-dowlbear = 0
-
-i = 0
-while i < 1000:
-
-    wolf = copy.copy(minotaur_)
-    owlbear = copy.copy(owlbear_)
-
-    init_w = wolf.roll_initiative()
-    init_o = owlbear.roll_initiative()
-
-    if init_w > init_o:
-        while owlbear.is_alive and wolf.is_alive:
-            wolf.attack(owlbear)
-            owlbear.attack(wolf)
-    else:
-        while owlbear.is_alive and wolf.is_alive:
-            wolf.attack(owlbear)
-            owlbear.attack(wolf)
-
-    if wolf.hp <= 0:
-        dowlbear += 1
-    if owlbear.hp <= 0:
-        dwolf += 1
-    i += 1
-
-print(dwolf, dowlbear)
-'''

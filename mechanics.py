@@ -5,7 +5,7 @@ import dice
 import math
 import re
 
-class Ruleset:
+class DnDRuleset:
 
     @staticmethod
     def parse_damage_type(damage_type):
