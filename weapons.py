@@ -2,10 +2,26 @@ import dice
 from mechanics import DnDRuleset as R
 from messages import IO
 
+"""
+Weapon class
+
+    name
+    damage
+    damage_type
+    reach
+    to_hit
+    number_of_targets
+    on_it_special           OBJ
+
+"""
+
 class Weapon(object):
 
     def __init__(self, name, damage, damage_type,
-                 reach, to_hit, number_of_targets=1):
+                 reach, to_hit, number_of_targets=1,
+                 special=[]):
+
+        self.type = 'weapon'
         self.name = name
         self.damage_print = damage
         self.damage = dice.parse_damage(damage)
@@ -13,6 +29,7 @@ class Weapon(object):
         self.reach = reach
         self.to_hit = to_hit
         self.number_of_targets = number_of_targets
+        self.special = special
 
     def __repr__(self):
         dmg = []
@@ -23,31 +40,19 @@ class Weapon(object):
         return "{name}: {dmg}".format(name=self.name.capitalize(),
                                       dmg=", ".join(dmg))
 
+    def apply_condition(self):
+        pass
+
     def use(self, source, target):
-        hit, crit_multiplier, hitroll, message \
-            = R.roll_hit(source, target, self.to_hit, self.name)
 
-        """ Iterate all different damage types in weapon if hit """
-        total_damage = []
+        """ Roll d20 to hit """
+        hit, crit_multiplier, hitroll = R.roll_hit(source, target, self)
+
+        """ Iterate all different damage types in weapon if successful """
         if hit:
-            for i in range(len(self.damage)):
-                dmg = self.damage[i]
-                dmg_type = self.damage_type[i]
-                """ Store total damage """
-                total_damage.append(
-                    R.roll_damage(source ,target, dmg, dmg_type, crit_multiplier))
+            R.iterate_damage(source, target, self, crit_multiplier)
 
-
-            if target.hp <= -target.max_hp:
-                source.kills += 1
-                msg = ". Target turns into bloody pulp!"
-            elif target.hp <= 0:
-                source.kills += 1
-                msg = ". Target dies!"
-            else:
-                msg = "."
-
-            message += ": does " + " and ".join(total_damage) \
-                       + " damage" + msg + " (%i HP remaining)." % target.hp
-
-        IO.printmsg(message, 2, indent=True, print_turn=True)
+            """ Apply weapon's special abilities on target"""
+            if self.special:
+                for on_hit_effect in self.special:
+                    on_hit_effect.use(source, target)

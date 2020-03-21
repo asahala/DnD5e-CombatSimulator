@@ -1,14 +1,19 @@
 import random
 import re
 
-def roll(times, sides, bonus):
-    return sum([random.randint(1, sides) for n in range(0, times)]) + bonus
+def roll(times, sides, bonus, advantage=0):
+    if advantage == -1:
+        return min(roll(times, sides, bonus), roll(times, sides, bonus))
+    elif advantage == 1:
+        return max(roll(times, sides, bonus), roll(times, sides, bonus))
+    else:
+        return sum([random.randint(1, sides) for n in range(0, times)]) + bonus
 
-def roll_advantage(times, sides, bonus):
-    return max(roll(times, sides, bonus), roll(times, sides, bonus))
+#def roll_advantage(times, sides, bonus):
+#    return max(roll(times, sides, bonus), roll(times, sides, bonus))
 
-def roll_disadvantage(times, sides, bonus):
-    return min(roll(times, sides, bonus), roll(times, sides, bonus))
+#def roll_disadvantage(times, sides, bonus):
+#    return min(roll(times, sides, bonus), roll(times, sides, bonus))
 
 
 def parse_damage(damage):

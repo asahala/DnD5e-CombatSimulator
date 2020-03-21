@@ -4,6 +4,13 @@
 import dice
 import math
 import re
+import messages
+
+
+class Movement:
+
+    def __init__(self, x=0, y=0):
+        pass
 
 class DnDRuleset:
 
@@ -16,14 +23,20 @@ class DnDRuleset:
         return re.sub('.*\((.+)\).*', r'\1', damage_type).split(':') + [dmg_type]
 
     @staticmethod
-    def roll_hit(source, target, bonus, attack_name):
+    def roll_hit(source, target, attack):
+        """ Genera hit roller
+        :param source     source of attack (creature object)
+        :param target     target of attack (creature object)
+        :param attack     ability or weapon (weapon or ability object) """
+
+        messages.IO.reset()
+
+        bonus = attack.to_hit
+        attack_name = attack.name
+
         """ Check advantage conditions """
-        if source.has_advantage_against(target):
-            hitroll = dice.roll_advantage(1, 20, 0)
-        elif source.has_disadvantage:
-            hitroll = dice.roll_disadvantage(1, 20, 0)
-        else:
-            hitroll = dice.roll(1, 20, 0)
+        advantage = source.advantage['hit']
+        hitroll = dice.roll(1, 20, 0, advantage)
             
         """ Apply critical multiplier """
         multiplier = int(max(hitroll / 10, 1))
@@ -42,38 +55,54 @@ class DnDRuleset:
             hit = False
             msg = "misses"
 
-        message = "{source} ({sourceteam}) {hit} {target} ({targetteam})"\
-                  " with {attackname}"\
-                    .format(source=source.name, sourceteam=source.party,
-                    target=target.name, targetteam=target.party,
-                    attackname=attack_name, hit=msg)
+        messages.IO.log += "{source} {hit} {target}"\
+                  " with {attackname}.".format(source=source.name,
+                                               #sourceteam=source.party,
+                                               target=target.name,
+                                               #targetteam=target.party,
+                                               attackname=attack_name,
+                                               hit=msg)
 
-        return hit, multiplier, hitroll + bonus, message
+        if not hit:
+            messages.IO.printlog()
+            messages.IO.reset()
+
+        return hit, multiplier, hitroll + bonus
 
     @staticmethod
-    def roll_save(creature, ability, dc):
+    def roll_save(target, ability, dc):
         """ Return True if save is successful"""
-        bonus = creature.get_modifier(ability)
-        return dice.roll(1, 20, bonus) >= int(dc)
+        bonus = target.saves[ability]
+        advantage = target.advantage[ability]
+        return dice.roll(1, 20, bonus, advantage) >= int(dc)
 
     @staticmethod
-    def roll_damage(source, target, dmg, dmg_type, crit_multiplier):
+    def iterate_damage(source, target, weapon, crit_multiplier=1):
+        """ Iterate all damage types in weapon or ability and roll
+        damages """
+        for i in range(len(weapon.damage)):
+            dmg = weapon.damage[i]
+            dmg_type = weapon.damage_type[i]
+            DnDRuleset.roll_damage(source, target, weapon, dmg, dmg_type, crit_multiplier)
+        messages.IO.printlog()
+
+    @staticmethod
+    def roll_damage(source, target, weapon, dmg, dmg_type, crit_multiplier=1):
 
         """ Parse damage as times, sides and bonus """
         times, sides, bonus = dmg
         damage = dice.roll(times*crit_multiplier, sides, bonus)
 
         """ Check if there's save against the damage """
-        if 'DC' in dmg_type:
-            _, ability, multiplier, dc, dmg_type =\
-                Ruleset.parse_damage_type(dmg_type)
-            """ Saving throw, scale damage if success """
-            if Ruleset.roll_save(target, ability, dc):
-                damage = math.floor(float(multiplier) * damage)
-            else:
-                """ Special conditions for damage types """
-                if dmg_type.startswith('poison'):
-                    target.set_poison(True)
+
+        if weapon.type == 'ability':
+            if weapon.save is not None:
+                """ Scale damage with a given factor if successful save """
+                if DnDRuleset.roll_save(target, weapon.save, weapon.dc):
+                   damage = math.floor(float(weapon.success) * damage)
+                else:
+                    """ Special conditions for damage types """
+                    weapon.apply_condition(target)
 
         """ Check if target has resistance or immunity to 
         the given damage type """
@@ -85,4 +114,9 @@ class DnDRuleset:
         """ Subtract damage from target's HP pool """
         target.hp -= damage
 
-        return "%i %s" % (damage, dmg_type)
+        messages.IO.total_damage.setdefault(dmg_type, 0)
+        messages.IO.total_damage[dmg_type] += damage
+        messages.IO.hp = target.hp
+        messages.IO.target_name = target.name
+
+

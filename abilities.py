@@ -1,15 +1,31 @@
 
 import dice
-from messages import IO
+from mechanics import DnDRuleset as R
 
 class Ability:
 
-    """ Base class for special creature actions and abilities """
+    """ Base class for special creature actions and abilities
+    :param name              ability name
+    :param dc                save DC
+    :param save              ability score tied to this save
+    :param to-hit            to hit bonus
+    :param success           damage multiplier if successful save
+    :param recharge          recharge value
 
-    def __init__(self, name, dc, save, to_hit, recharge=0, **kwargs):
+    :type name               str
+    :type dc                 int
+    :type save               str
+    :type to-hit             int
+    :type success            float
+    :type recharge           int """
+
+    def __init__(self, name, dc=None, save=None, to_hit=None,
+                 success=None, recharge=0, **kwargs):
+        self.type = 'ability'
         self.name = name
         self.dc = dc
         self.save = save
+        self.success = success
         self.to_hit = to_hit
         self.recharge = recharge
         self.available = True
@@ -26,10 +42,31 @@ class Ability:
 
 class Restrain(Ability):
 
-    def use(self, creature, enemy):
-        if creature.roll_hit(self.to_hit, enemy.ac):
-            enemy.set_restrain(True, self.dc, self.save)
+    def use(self, source, target):
+        if R.roll_hit(source, target, self):
+            target.set_restrain(True, self.dc, self.save)
         self.available = False
+
+
+class Knockdown(Ability):
+
+    def use(self, source, target):
+        if not R.roll_save(target, self.save, self.dc):
+            target.set_prone(True)
+
+
+class Poison(Ability):
+
+    def __init__(self, damage, damage_type, **kwargs):
+        super().__init__(**kwargs)
+        self.damage = dice.parse_damage(damage)
+        self.damage_type = damage_type
+
+    def use(self, source, target):
+        R.iterate_damage(source, target, self)
+
+    def apply_condition(self, target):
+        target.set_poison(state=True, dc=self.dc, save=self.save)
 
 
 class Gore(Ability):
@@ -39,22 +76,22 @@ class Gore(Ability):
         self.damage = dice.parse_damage(damage)
         self.damage_type = damage_type
 
-    def use(self, creature, enemy):
-        if creature.roll_hit(self.to_hit, enemy.ac):
+    def use(self, source, target):
+        if source.roll_hit(self.to_hit, target.ac):
             #self.apply_damage(self.damage, self.damage_type, enemy)
-            enemy.set_prone(True)
+            target.set_prone(True)
 
 
 class PackTactics:
 
     """ Pack tactics gives and advantage to hit rolls if
-    creatures of similar type are nearby """
+    creatures of similar type are alive and nearby """
 
     @staticmethod
-    def use(creature, allies, enemies):
+    def use(creature, allies, enemies=[]):
         if len([c.type for c in allies.members
-                if c.type == creature.type]) > 1:
-            pass
+                if c.type == creature.type and not c.is_dead]) > 1:
+            creature.set_advantage('hit', 1)
 
     
     
