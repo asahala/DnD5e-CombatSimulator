@@ -11,22 +11,27 @@ import messages
 from collections import Counter
 from weapons import Weapon
 from abilities import *
+from mechanics import DnDRuleset as R
+
 
 class Basecreature(object):
 
-    def __init__(self, name, size, cr, ac, hp, speed,
-                 scores, attacks, actions,
+    def __init__(self, name, size, category, cr, ac, hp, speed,
+                 scores, attacks, actions=[],
                  saves=None,
                  passives=[],
                  resistances=[],
-                 immunities=[]):
+                 immunities=[],
+                 vulnerabilities=[]):
         self.name = name.upper()  # Enumerated name, e.g. ´wolf 3´
         self.type = name  # Creature base-type, e.g. ´wolf´
+        self.category = category
         self.size = size
         self.cr = cr
         self.ac = ac
         self.max_hp = hp
         self.hp = hp
+        self.max_speed = speed
         self.speed = speed
         self.original_scores = scores
         self.scores = scores
@@ -36,6 +41,7 @@ class Basecreature(object):
 
         self.resistances = resistances
         self.immunities = immunities
+        self.vulnerabilities = vulnerabilities
 
         self.ac_bonus = 0
         self.to_hit_bonus = 0
@@ -49,9 +55,13 @@ class Basecreature(object):
         self.restrained = {"state": False, "dc": 0, "save": "str"}
         self.prone = False
         self.poisoned = {"state": False, "dc": 0, "save": "con"}
+        self.paralyzed = {"state": False, "dc": 0, "save": "con"}
 
         self.damage_dealt = 0
         self.kills = 0
+
+        """ If creature is grappled, mark who's grappling """
+        self.grappled = {"state": False, "dc": 0, "save": "str", "by": None}
 
         """ Set advantage or disadvantage to hit, ability checks or 
         saves tied to certain ability scores """
@@ -65,6 +75,9 @@ class Basecreature(object):
 
         """ X, Y Coordinates """
         self.position = []
+
+        #TODO movement
+        self.distance = 30
 
     def __repr__(self):
         CR = {0.125: "1/8", 0.25: "1/4", 0.5: "1/2"}
@@ -112,8 +125,20 @@ class Basecreature(object):
         return self.prone
 
     @property
+    def is_incapacitated(self):
+        """ Conditions that prevent all actions except end turn
+        saves """
+        if self.paralyzed['state']:
+            return True
+        return False
+
+    @property
     def is_poisoned(self):
         return self.poisoned
+
+    @property
+    def is_paralyzed(self):
+        return self.paralyzed["state"]
 
     @property
     def has_disadvantage(self):
@@ -121,7 +146,13 @@ class Basecreature(object):
                     self.is_restrained,
                     self.is_poisoned])
 
-    def has_advantage_against(self, other):
+    @property
+    def gives_advantage_to_attacker(self):
+        return any([self.is_prone,
+                    self.is_restrained,
+                    self.is_paralyzed])
+
+    def ___has_advantage_against(self, other):
         """ Return True if enemy is given advantage on hit rolls against
         the creature """
         return any([other.is_prone,
@@ -138,7 +169,7 @@ class Basecreature(object):
         return math.floor((self.scores[ability] - 10) / 2)
 
     def begin_turn(self):
-        """ At the beginning of each turn, perform a list of free
+        """ At the beginning of each turn, perform a list of
         actions such as standing up, recharging abilities etc. """
         self.movement_points = self.speed
 
@@ -147,21 +178,76 @@ class Basecreature(object):
             self.set_prone(False)
             self.movement_points = math.floor(self.speed / 2)
 
+        """ Free from grapple if grappler has died """
+        if self.grappled["state"]:
+            if self.grappled["by"].is_dead:
+                self.set_grapple(state=False, dc=0, save='str', source=None)
+
         """ Recharge abilities """
         if self.actions:
             for action in self.actions:
                 action.check_and_recharge()
 
-    def set_restrain(self, state, dc=0, save='str'):
+    def end_turn(self):
+        """ Reroll save against paralysis  """
+        if self.is_paralyzed:
+            dc = self.paralyzed["dc"]
+            ability = self.paralyzed['save']
+            if R.roll_save(self, ability, dc):
+                self.set_paralysis(False, dc=0, save=None)
+
+    def take_damage(self, damage, dmg_type, crit_multiplier):
+
+        self.hp -= damage
+
+        """ Check if creature can drop to 1 HP instead of 0 """
+        if self.hp <= 0 and self.passives:
+            for passive in self.passives:
+                if passive.type == 'avoid_death':
+                    self.hp = passive.use(self, damage, dmg_type, crit_multiplier)
+
+    def set_grapple(self, state, dc=0, save='str', source=None):
         if state:
-            self.set_advantage('hit', 0)
-            self.set_advantage('dex', 0)
-        else:
+            messages.IO.printmsg("-> %s is restrained. " % self.name, 2, True, False)
             self.set_advantage('hit', -1)
             self.set_advantage('dex', -1)
+            self.speed = 0
+        else:
+            messages.IO.printmsg("%s frees from restrain. " % self.name, 2, True, False)
+            self.set_advantage('hit', 0)
+            self.set_advantage('dex', 0)
+            self.speed = self.max_speed
+        self.grappled["state"] = state
+        self.grappled["dc"] = dc
+        self.grappled["save"] = save
+        self.grappled["by"] = source
+
+    def set_restrain(self, state, dc=0, save='str'):
+        if state:
+            messages.IO.printmsg("-> %s is restrained. " % self.name, 2, True, False)
+            self.set_advantage('hit', -1)
+            self.set_advantage('dex', -1)
+            self.speed = 0
+        else:
+            messages.IO.printmsg("%s frees from restrain. " % self.name, 2, True, False)
+            self.set_advantage('hit', 0)
+            self.set_advantage('dex', 0)
+            self.speed = self.max_speed
         self.restrained["state"] = state
         self.restrained["dc"] = dc
         self.restrained["save"] = save
+
+    def set_paralysis(self, state, dc=0, save='str'):
+        if not "paralysis" in self.immunities:
+            if state:
+                messages.IO.printmsg("-> %s is paralyzed. " % self.name, 2, True, False)
+                self.speed = 0
+            else:
+                messages.IO.printmsg("%s recovers from paralysis. " % self.name, 2, True, True)
+                self.speed = self.max_speed
+            self.paralyzed["state"] = state
+            self.paralyzed["dc"] = dc
+            self.paralyzed["save"] = save
 
     def set_prone(self, state):
         if state:
@@ -172,38 +258,38 @@ class Basecreature(object):
         self.prone = state
 
     def set_poison(self, state, dc=0, save='con'):
-        if state:
-            messages.IO.printmsg("-> %s is poisoned. " % self.name, 2, True, False)
-            self.set_advantage('hit', 0)
-        else:
-            self.set_advantage('hit', -1)
-            messages.IO.printmsg("%s recovers from poison. " % self.name, 2, True, True)
-        self.poisoned["state"] = state
-        self.poisoned["dc"] = dc
-        self.poisoned["save"] = save
+        if not 'poison' in self.immunities:
+            if state:
+                messages.IO.printmsg("-> %s is poisoned. " % self.name, 2, True, False)
+                self.set_advantage('hit', 0)
+            else:
+                self.set_advantage('hit', -1)
+                messages.IO.printmsg("%s recovers from poison. " % self.name, 2, True, True)
+            self.poisoned["state"] = state
+            self.poisoned["dc"] = dc
+            self.poisoned["save"] = save
 
     def set_advantage(self, category, state):
-        """ Give advantage or disadvantage on a certain category
+        """ Give advantage or disadvantage to a certain category
         :param category    hit, save, ability
-        :param state       -1, 0, 1
-        """
+        :param state       -1, 0, 1 """
+
         if state == -1:
-            self.advantage[category] = \
-                max(self.advantage[category] + state, -1)
+            self.advantage[category] =\
+                max(self.advantage[category] + state, state)
         elif state == 1:
-            self.advantage[category] = \
-                min(self.advantage[category] + state, 1)
+            self.advantage[category] =\
+                min(self.advantage[category] + state, state)
         else:
             self.advantage[category] = 0
 
     def roll_initiative(self):
         """ Roll initiative for the creature, add decimals based
-        on dexterity score and challenge rating to resolve same
-        initiatives; if still same, pick random """
+        on dexterity score and challenge rating to resolve equal rolls """
         dex = self.scores['dex'] / 100
         cr = self.cr / 1000
         dex_mod = self.get_modifier('dex')
-        self.initiative = dice.roll(times=1, sides=20, bonus=dex_mod) + dex + cr
+        self.initiative = dice.roll(1, 20, dex_mod) + dex + cr
 
     def check_resistances(self, damage_type, damage):
         """ Strip save DC info from damage_type """
@@ -212,6 +298,14 @@ class Basecreature(object):
             damage = math.floor(damage / 2)
         if damage_type in self.immunities:
             damage = 0
+
+        return damage
+
+    def check_vulnerabilities(self, damage_type, damage):
+        """ Strip save DC info from damage_type """
+        damage_type = re.sub('\(.+?\)', '', damage_type)
+        if damage_type in self.vulnerabilities:
+            return damage * 2
         return damage
 
     def take_ability_score_damage(self, ability_score, damage):
@@ -229,15 +323,17 @@ class Basecreature(object):
         """ Check passive skills """
         if self.passives:
             for passive in self.passives:
-                passive.use(self, allies, enemies)
+                if passive.type == 'on_start':
+                    passive.use(self, allies, enemies)
 
     def perform_action(self, allies, enemies):
-        """ General method for performing actions; reset action
-         log at the beginning of creature's turn """
+        """ General method for performing actions """
         if not self.is_dead:
-            self.begin_turn()
-            self.check_passives(allies, enemies)
-            self.attack(enemies)
+            if not self.is_incapacitated:
+                self.begin_turn()
+                self.check_passives(allies, enemies)
+                self.attack(enemies)
+            self.end_turn()
 
     def attack(self, enemies):
         """ Set focus on enemy and attack it """
@@ -250,91 +346,6 @@ class Basecreature(object):
                 """ Do not attack if there is no enemies left """
                 if self.focused_enemy is not None:
                     attack.use(self, self.focused_enemy)
-
-
-
-spider_web = Restrain(name="Web", dc=11, save='str', to_hit=5, recharge=5)
-minotaur_gore = Gore(name="Gore", dc=14, save='str', to_hit=6, damage=["4d8+4"], damage_type=["piercing"])
-pack_tactics = PackTactics
-
-wolf_bite = Weapon(name='bite',
-                   damage=["2d4+2"],
-                   damage_type=["piercing"],
-                   reach=5,
-                   to_hit=7,
-                   special=[Knockdown(name="bite",
-                                      dc=11,
-                                      save='str')])
-
-spider_bite = Weapon(name='bite', damage=["1d10+2"],
-                     damage_type=["piercing"],
-                     reach=5,
-                     to_hit=4,
-                     special=[Poison(name='bite',
-                                     dc=11,
-                                     save='con',
-                                     damage=['4d8'],
-                                     success=0.5,
-                                     damage_type=['poison'])])
-
-owlbear_beak = Weapon('beak', ["1d10+5"], ["piercing"], 5, 7)
-owlbear_claws = Weapon('claws', ["2d8+5"], ["slashing"], 5, 7)
-minotaur_greataxe = Weapon('greataxe', ["2d12+4"], ["slashing"], 5, 6)
-nightmare_hooves = Weapon('hooves', ["2d8+4", "2d6"], ["bludgeoning", "fire"], 5, 6)
-greatclub = Weapon('greatclub', ["3d8+6"], ["bludgeoning"], 15, 9)
-
-wolf_ = Basecreature(name='wolf', cr=0.25, ac=13, hp=11, speed=40,
-                     size='medium',
-                     scores={'str': 12, 'dex': 15, 'con': 12,
-                             'int': 3, 'wis': 12, 'cha': 7},
-                     attacks=[wolf_bite],
-                     actions=[],
-                     passives=[pack_tactics])
-
-spider_ = Basecreature(name='spider', cr=0.25, ac=13, hp=11, speed=40,
-                       size='medium',
-                       scores={'str': 12, 'dex': 15, 'con': 12,
-                               'int': 3, 'wis': 12, 'cha': 7},
-                       attacks=[spider_bite],
-                       actions=[])
-
-owlbear_ = Basecreature(name='owlbear', cr=3, ac=13, hp=59, speed=40,
-                        size='medium',
-                        scores={'str': 20, 'dex': 12, 'con': 17,
-                                'int': 3, 'wis': 12, 'cha': 7},
-                        attacks=[[owlbear_claws, owlbear_beak]],
-                        actions=[])
-
-minotaur_ = Basecreature(name='minotaur', cr=3, ac=14, hp=76, speed=40,
-                         size='medium',
-                         scores={'str': 18, 'dex': 11, 'con': 16,
-                                 'int': 6, 'wis': 16, 'cha': 9},
-                         attacks=[minotaur_greataxe],
-                         actions=[minotaur_gore])
-
-nightmare_ = Basecreature(name='nightmare', cr=3, ac=13, hp=68, speed=60,
-                          size='medium',
-                          scores={'str': 18, 'dex': 15, 'con': 16,
-                                  'int': 10, 'wis': 13, 'cha': 15},
-                          immunities=['fire'],
-                          attacks=[nightmare_hooves],
-                          actions=[])
-
-stone_giant_ = Basecreature(name='stone giant', cr=7, ac=17, hp=126, speed=40,
-                            size='medium',
-                            scores={'str': 23, 'dex': 15, 'con': 20,
-                                    'int': 10, 'wis': 12, 'cha': 9},
-                            saves={'str': 10},
-                            attacks=[copy.copy(greatclub), copy.copy(greatclub)],
-                            actions=[])
-
-dummy_ = Basecreature(name='dummy', cr=7, ac=10, hp=126, speed=40,
-                      size='medium',
-                      scores={'str': 11, 'dex': 15, 'con': 11,
-                              'int': 10, 'wis': 12, 'cha': 9},
-                      saves={'str': 0},
-                      attacks=[],
-                      actions=[])
 
 
 class Party:
@@ -409,6 +420,252 @@ class Party:
                           reverse=strongest_first)
 
 
+spider_web = Restrain(name="Web", dc=11, save='str', to_hit=5, recharge=5)
+# minotaur_gore = Gore(name="Gore", dc=14, save='str', to_hit=6, damage=["4d8+4"], damage_type=["piercing"])
+pack_tactics = PackTactics
+
+wolf_bite = Weapon(name='bite',
+                   damage=["2d4+2"],
+                   damage_type=["piercing"],
+                   reach=5,
+                   to_hit=7,
+                   special=[Knockdown(name="bite",
+                                      dc=11,
+                                      save='str')])
+
+giant_spider_bite = Weapon(name='bite', damage=["1d8+3"],
+                           damage_type=["piercing"],
+                           reach=5,
+                           to_hit=5,
+                           special=[Poison(name='bite',
+                                           dc=11,
+                                           save='con',
+                                           damage=['2d8'],
+                                           success=0.5,
+                                           damage_type=['poison'])])
+
+dire_wolf_bite = Weapon(name='bite',
+                        damage=["2d6+3"],
+                        damage_type=["piercing"],
+                        reach=5,
+                        to_hit=5,
+                        special=[Knockdown(name="bite",
+                                           dc=13,
+                                           save='str')])
+
+crocodile_bite = Weapon(name='bite',
+                        damage=["1d10+2"],
+                        damage_type=["piercing"],
+                        reach=5,
+                        to_hit=4,
+                        special=[Grapple(name='bite', dc=15, save='str')])
+
+lion_bite = Weapon(name='bite',
+                   damage=["1d8+3"],
+                   damage_type=["piercing"],
+                   reach=5,
+                   to_hit=5)
+
+lion_claw = Weapon(name='claw',
+                   damage=["1d6+3"],
+                   damage_type=["slashing"],
+                   reach=5,
+                   to_hit=5)
+
+lion_pounce = Weapon(name='pounce',
+                     damage=["1d6+3"],
+                     damage_type=["slashing"],
+                     reach=5,
+                     to_hit=5,
+                     special=[Knockdown(name="pounce", dc=13, save='str',
+                                        charge_distance=20,
+                                        bonus_action=lion_bite)])
+
+mammoth_trample = Weapon(name='trample',
+                         damage=["4d10+7"],
+                         damage_type=["bludgeoning"],
+                         reach=5,
+                         to_hit=10)
+
+mammoth_gore = Weapon(name='gore',
+                      damage=["4d8+7"],
+                      damage_type=["piercing"],
+                      reach=10,
+                      to_hit=10,
+                      special=[Knockdown(name="trampling charge", dc=18, save='str',
+                                         charge_distance=20,
+                                         bonus_action=mammoth_trample)])
+
+ghoul_bite = Weapon(name='bite',
+                    damage=["2d6+2"],
+                    damage_type=["piercing"],
+                    reach=5,
+                    to_hit=2)
+
+ghoul_claw = Weapon(name='claws',
+                    damage=["2d4+2"],
+                    damage_type=["slashing"],
+                    reach=5,
+                    to_hit=4,
+                    special=[Paralysis(name='claws', dc=10, save='con')])
+
+owlbear_beak = Weapon('beak', ["1d10+5"], ["piercing"], 5, 7)
+owlbear_claws = Weapon('claws', ["2d8+5"], ["slashing"], 5, 7)
+minotaur_greataxe = Weapon('greataxe', ["2d12+4"], ["slashing"], 5, 6)
+nightmare_hooves = Weapon('hooves', ["2d8+4", "2d6"], ["bludgeoning", "fire"], 5, 6)
+greatclub = Weapon('greatclub', ["3d8+6"], ["bludgeoning"], 15, 9)
+
+bat = Basecreature(name='bat', cr=0, ac=12, hp=1, speed=30,
+                   size='tiny',
+                   category="beast",
+                   scores={'str': 2, 'dex': 15, 'con': 8,
+                           'int': 2, 'wis': 12, 'cha': 4},
+                   attacks=[Weapon(name='bite',
+                                   damage=["1d1"],
+                                   damage_type=["piercing"],
+                                   reach=5,
+                                   to_hit=0)])
+
+black_bear = Basecreature(name='black bear', cr=0.5, ac=11, hp=19, speed=40,
+                          size='medium',
+                          category="beast",
+                          scores={'str': 15, 'dex': 10, 'con': 14,
+                                  'int': 2, 'wis': 12, 'cha': 7},
+                          attacks=[(Weapon(name='bite', damage=["1d6+2"], damage_type=["piercing"], reach=5, to_hit=3),
+                                    Weapon(name='claws', damage=["2d4+2"], damage_type=["slashing"], reach=5,
+                                           to_hit=3))])
+
+brown_bear = Basecreature(name='brown bear', cr=1, ac=11, hp=34, speed=40,
+                          size='large',
+                          category="beast",
+                          scores={'str': 19, 'dex': 10, 'con': 16,
+                                  'int': 2, 'wis': 13, 'cha': 7},
+                          attacks=[(Weapon(name='bite', damage=["1d8+4"], damage_type=["piercing"], reach=5, to_hit=5),
+                                    Weapon(name='claws', damage=["2d6+4"], damage_type=["slashing"], reach=5,
+                                           to_hit=5))])
+
+crocodile = Basecreature(name='crocodile', cr=0.5, ac=12, hp=19, speed=20,
+                         size='large',
+                         category="beast",
+                         scores={'str': 15, 'dex': 10, 'con': 13,
+                                 'int': 2, 'wis': 10, 'cha': 5},
+                         attacks=[crocodile_bite])
+
+dire_wolf = Basecreature(name='dire wolf', cr=1, ac=14, hp=37, speed=50,
+                         size='large',
+                         category="beast",
+                         scores={'str': 17, 'dex': 15, 'con': 15,
+                                 'int': 3, 'wis': 12, 'cha': 7},
+                         attacks=[dire_wolf_bite])
+
+wolf = Basecreature(name='wolf', cr=0.25, ac=13, hp=11, speed=40,
+                    size='medium',
+                    category="beast",
+                    scores={'str': 12, 'dex': 15, 'con': 12,
+                            'int': 3, 'wis': 12, 'cha': 7},
+                    attacks=[wolf_bite],
+                    actions=[],
+                    passives=[pack_tactics])
+
+lion = Basecreature(name='lion', cr=1, ac=12, hp=26, speed=50,
+                    size='large',
+                    category="beast",
+                    scores={'str': 17, 'dex': 15, 'con': 13,
+                            'int': 3, 'wis': 12, 'cha': 8},
+                    attacks=[lion_bite, lion_claw, lion_pounce],
+                    passives=[pack_tactics])
+
+mammoth = Basecreature(name='mammoth', cr=6, ac=13, hp=126, speed=40,
+                       size='huge',
+                       category="beast",
+                       scores={'str': 24, 'dex': 9, 'con': 21,
+                               'int': 3, 'wis': 11, 'cha': 6},
+                       attacks=[mammoth_gore])
+
+skeleton = Basecreature(name='skeleton', cr=0.25, ac=13, hp=13, speed=30,
+                        size='medium',
+                        category="undead",
+                        scores={'str': 10, 'dex': 14, 'con': 15,
+                                'int': 6, 'wis': 8, 'cha': 5},
+                        immunities=['poison', 'paralysis'],
+                        vulnerabilities=['bludgeoning'],
+                        attacks=[
+                            Weapon(name='shortsword', damage=["1d6+2"], damage_type=["slashing"], reach=5, to_hit=4)])
+
+zombie = Basecreature(name='zombie', cr=0.25, ac=8, hp=22, speed=20,
+                      size='medium',
+                      category="undead",
+                      scores={'str': 13, 'dex': 6, 'con': 16,
+                              'int': 3, 'wis': 6, 'cha': 5},
+                      saves={'wis': 0},
+                      immunities=['poison', 'paralysis'],
+                      attacks=[Weapon(name='slam',
+                                      damage=["1d6+1"],
+                                      damage_type=["bludgeoning"],
+                                      reach=5,
+                                      to_hit=3)],
+                      passives=[AvoidDeath(name="Undead Fortitude",
+                                           save='con',
+                                           minimum_hp=1)])
+
+ghoul = Basecreature(name='ghoul', cr=1, ac=12, hp=22, speed=30,
+                     size='medium',
+                     category="undead",
+                     scores={'str': 13, 'dex': 15, 'con': 10,
+                             'int': 7, 'wis': 10, 'cha': 6},
+                     immunities=['poison', 'paralysis'],
+                     attacks=[ghoul_bite, ghoul_claw])
+
+giant_spider = Basecreature(name='giant spider', cr=1, ac=14, hp=26, speed=30,
+                            size='large',
+                            category='beast',
+                            scores={'str': 14, 'dex': 16, 'con': 12,
+                                    'int': 2, 'wis': 11, 'cha': 4},
+                            attacks=[giant_spider_bite],
+                            actions=[])
+
+owlbear = Basecreature(name='owlbear', cr=3, ac=13, hp=59, speed=40,
+                       size='medium',
+                       category="beast",
+                       scores={'str': 20, 'dex': 12, 'con': 17,
+                               'int': 3, 'wis': 12, 'cha': 7},
+                       attacks=[[owlbear_claws, owlbear_beak]],
+                       actions=[])
+
+minotaur = Basecreature(name='minotaur', cr=3, ac=14, hp=76, speed=40,
+                        size='medium',
+                        category="beast",
+                        scores={'str': 18, 'dex': 11, 'con': 16,
+                                'int': 6, 'wis': 16, 'cha': 9},
+                        attacks=[minotaur_greataxe])
+
+nightmare = Basecreature(name='nightmare', cr=3, ac=13, hp=68, speed=60,
+                         size='medium',
+                         category="beast",
+                         scores={'str': 18, 'dex': 15, 'con': 16,
+                                 'int': 10, 'wis': 13, 'cha': 15},
+                         immunities=['fire'],
+                         attacks=[nightmare_hooves],
+                         actions=[])
+
+stone_giant = Basecreature(name='stone giant', cr=7, ac=17, hp=126, speed=40,
+                           size='medium',
+                           category='???',
+                           scores={'str': 23, 'dex': 15, 'con': 20,
+                                   'int': 10, 'wis': 12, 'cha': 9},
+                           saves={'str': 10},
+                           attacks=[copy.copy(greatclub), copy.copy(greatclub)],
+                           actions=[])
+
+dummy = Basecreature(name='dummy', cr=7, ac=10, hp=126, speed=40,
+                     size='medium',
+                     category='dummy',
+                     scores={'str': 11, 'dex': 15, 'con': 11,
+                             'int': 10, 'wis': 12, 'cha': 9},
+                     saves={'str': 0},
+                     attacks=[wolf_bite])
+
+
 class Encounter:
 
     def __init__(self, party1, party2):
@@ -455,17 +712,20 @@ class Encounter:
 
 i = 0
 results = []
-messages.VERBOSE_LEVEL = 2
+messages.VERBOSE_LEVEL = 0
 while i < 1:
     print("Match %i" % i)
     team1 = Party(name='Team A')
-    team1.add(copy.copy(owlbear_))
+    team1.add(copy.copy(ghoul))
+    team1.add(copy.copy(ghoul))
+    team1.add(copy.copy(ghoul))
+    team1.add(copy.copy(ghoul))
+    team1.add(copy.copy(ghoul))
+
 
     team2 = Party(name='Team B')
-    team2.add(copy.copy(wolf_))
-    team2.add(copy.copy(wolf_))
-    team2.add(copy.copy(wolf_))
-    team2.add(copy.copy(spider_))
+    team2.add(copy.copy(dire_wolf))
+    team2.add(copy.copy(dire_wolf))
 
     x = Encounter(team1, team2)
     results.append(x.fight())

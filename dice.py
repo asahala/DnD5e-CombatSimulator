@@ -3,8 +3,10 @@ import re
 
 def roll(times, sides, bonus, advantage=0):
     if advantage == -1:
+        #print('disadvantage')
         return min(roll(times, sides, bonus), roll(times, sides, bonus))
     elif advantage == 1:
+        #print('advantage')
         return max(roll(times, sides, bonus), roll(times, sides, bonus))
     else:
         return sum([random.randint(1, sides) for n in range(0, times)]) + bonus

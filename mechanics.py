@@ -35,11 +35,21 @@ class DnDRuleset:
         attack_name = attack.name
 
         """ Check advantage conditions """
+        if target.gives_advantage_to_attacker:
+            source.set_advantage('hit', 1)
+
         advantage = source.advantage['hit']
+
         hitroll = dice.roll(1, 20, 0, advantage)
             
         """ Apply critical multiplier """
         multiplier = int(max(hitroll / 10, 1))
+
+        """ Auto-crit if target is paralyzed """
+        if target.is_paralyzed:
+            hitroll = 20
+            multiplier = 2
+
 
         """ Check if attack hits """
         if hitroll == 1:
@@ -57,9 +67,7 @@ class DnDRuleset:
 
         messages.IO.log += "{source} {hit} {target}"\
                   " with {attackname}.".format(source=source.name,
-                                               #sourceteam=source.party,
                                                target=target.name,
-                                               #targetteam=target.party,
                                                attackname=attack_name,
                                                hit=msg)
 
@@ -70,10 +78,19 @@ class DnDRuleset:
         return hit, multiplier, hitroll + bonus
 
     @staticmethod
-    def roll_save(target, ability, dc):
-        """ Return True if save is successful"""
+    def roll_save(target, ability, dc) -> bool:
+        """ Roll a save tied on ability against DC
+        :type target       CreatureBaseClass
+        :type ability      str
+        :type dc           int """
+
         bonus = target.saves[ability]
         advantage = target.advantage[ability]
+
+        """ Auto-fails """
+        if target.is_paralyzed and ability in ("str", "dex"):
+            return False
+
         return dice.roll(1, 20, bonus, advantage) >= int(dc)
 
     @staticmethod
@@ -93,8 +110,6 @@ class DnDRuleset:
         times, sides, bonus = dmg
         damage = dice.roll(times*crit_multiplier, sides, bonus)
 
-        """ Check if there's save against the damage """
-
         if weapon.type == 'ability':
             if weapon.save is not None:
                 """ Scale damage with a given factor if successful save """
@@ -108,11 +123,14 @@ class DnDRuleset:
         the given damage type """
         damage = target.check_resistances(dmg_type, damage)
 
+        """ Check vulnerabilities """
+        damage = target.check_vulnerabilities(dmg_type, damage)
+
         """ Store damage statistics """
         source.damage_dealt += damage
 
         """ Subtract damage from target's HP pool """
-        target.hp -= damage
+        target.take_damage(damage, dmg_type, crit_multiplier)
 
         messages.IO.total_damage.setdefault(dmg_type, 0)
         messages.IO.total_damage[dmg_type] += damage

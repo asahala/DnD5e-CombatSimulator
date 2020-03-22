@@ -43,13 +43,13 @@ class Weapon(object):
     def apply_condition(self):
         pass
 
-    def use(self, source, target):
+    def use(self, source, target, always_hit=False):
 
         """ Roll d20 to hit """
         hit, crit_multiplier, hitroll = R.roll_hit(source, target, self)
 
         """ Iterate all different damage types in weapon if successful """
-        if hit:
+        if hit or always_hit:
             R.iterate_damage(source, target, self, crit_multiplier)
 
             """ Apply weapon's special abilities on target"""

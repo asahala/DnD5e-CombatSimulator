@@ -7,6 +7,7 @@ class IO:
     turn = 0
     hp = 0
     target_name = ""
+    conditions = []
     total_damage = {}
     log = ""
 
@@ -15,6 +16,7 @@ class IO:
         IO.total_damage = {}
         IO.hp = 0
         IO.target_name = ""
+        IO.conditions = []
 
     def printlog():
         d = " + ".join(["%i %s" % (v, k) for k, v in IO.total_damage.items()])
@@ -25,12 +27,14 @@ class IO:
                 total = ""
             else:
                 total = " (total %i) " % total
-            taken = " %s%s damage taken, %i HP remaining." % (d, total, IO.hp)
+            taken = " %s%s damage dealt, %i HP remaining on target." % (d, total, IO.hp)
         else:
             taken = ""
 
         if IO.log:
             IO.printmsg(IO.log + taken, 2, True, True)
+        for condition in IO.conditions:
+            IO.printmsg("-> " + condition, 2, True, False)
 
         if IO.hp <= 0 and IO.target_name:
             death = "-> %s is dead!" % IO.target_name
