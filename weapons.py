@@ -18,10 +18,12 @@ Weapon class
 class Weapon(object):
 
     def __init__(self, name, damage, damage_type,
-                 reach, to_hit, number_of_targets=1,
+                 reach, to_hit, ammo=0, ranged=False, number_of_targets=1,
                  special=[]):
 
         self.type = 'weapon'
+        self.ammo = ammo
+        self.ranged = ranged
         self.name = name
         self.damage_print = damage
         self.damage = dice.parse_damage(damage)
