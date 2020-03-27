@@ -31,17 +31,17 @@ def get_path(A, B):
     j = 1
     if x0 > x1:
         j = -1
-    pathx = make_path(x0, x1, j)#[i for i in range(x0, x1 + j, j)]
+    pathx = make_path(x0, x1, j)
 
     j = 1
     if y0 > y1:
         j = -1
-    pathy = make_path(y0, y1, j)#[i for i in range(y0, y1 + j, j)]
+    pathy = make_path(y0, y1, j)
 
     j = 1
     if z0 > z1:
         j = -1
-    pathz = make_path(z0, z1, j)#[i for i in range(z0, z1 + j, j)]
+    pathz = make_path(z0, z1, j)
 
     """ Find longest path vector """
     lx, ly, lz = len(pathx), len(pathy), len(pathz)
@@ -65,7 +65,6 @@ def get_path(A, B):
         pathy = [pathy[int(i * jy)] for i in range(0, lz)]
 
     """ Combine path vectors into path of coordinates """
-    # return {get_dist(A, d):d for d in zip(pathx, pathy, pathz)}
     return [i for i in zip(pathx, pathy, pathz)]
 
 def is_adjacent(A, B):
@@ -105,7 +104,6 @@ def get_opposite(A, B, creature):
     return get_path(A, (x0 + round(f*ix), y0 + round(f*iy), 0))
 
 def close_distance(creature, path, reach, run=False):
-
     """ Store start position """
     sx, sy, sz = creature.position
 
@@ -117,19 +115,22 @@ def close_distance(creature, path, reach, run=False):
         multi = 1
         moves = "moves"
 
+    """ Iterate path ignoring the coordinates where target is located;
+    begin iteration from the most distant point and stop it when
+    creature speed is greater than the distance (i.e. can reach the 
+    position) """
     for coordinates in reversed(path[:-1]):
         x, y, z = coordinates
-        d = get_dist(creature.position, coordinates) - reach
-        #print(creature.speed['ground'] * multi, d)
-        if creature.speed['ground'] * multi >= d:
-            occupied.append([coordinates, creature])
-            creature.position = coordinates
-            creature.speed['ground'] -= d
+        distance = get_dist(creature.position, coordinates)
+        if creature.speed['ground'] * multi >= distance:
+            creature.position = coordinates       # Set new position
+            creature.speed['ground'] -= distance  # Subtract movement points
             msg = "%s %s %i ft. from (%i, %i, %i) to (%i, %i, %i)" \
                   % (creature.name, moves, d, sx, sy, sz, x,y,z)
             messages.IO.printmsg(msg, level=3, indent=True, print_turn=True)
-            return d, coordinates
+            return distance, coordinates
 
+    print('CLOSE DISTANCE ERROR')
 
 def keep_distance(creature, enemy, path, reach):
 
@@ -143,15 +144,48 @@ def keep_distance(creature, enemy, path, reach):
         d = get_dist(A, coordinates)
         de = get_dist(B, coordinates)
         if creature.speed['ground'] >= d and reach >= de:
-            occupied.append([coordinates, creature])
             creature.position = coordinates
             creature.speed['ground'] -= d
             msg = "%s moves %i ft. from (%i, %i, %i) to (%i, %i, %i)" \
                       % (creature.name, d, sx, sy, sz, x,y,z)
             messages.IO.printmsg(msg, level=2, indent=True, print_turn=True)
             return d, coordinates
+
     print('KEEP DISTANCE ERROR')
 
+def print_coords():
+    X = [i for i in range(-20,0)] + [i for i in range(0,21)]
+    Y = [i for i in range(20,0,-1)] + [i for i in range(0,-21, -1)]
+
+    def format(c):
+        c = str(c)
+        if len(c) == 3:
+            return c
+        if len(c) == 2:
+            return c + " "
+        else:
+            return " " + c + " "
+
+    print('   ' + "".join([format(x) for x in X]))
+
+    rows = []
+    for y in Y:
+        cols = []
+        for x in X:
+            symbol = "   "
+            for pos, c in occupied:
+                px, py, pz = pos
+                if x == px and y == py:
+                    symbol = c[0:3]
+            cols.append(symbol)
+
+        rows.append(cols)
+
+    i = 0
+    for r in rows:
+        print(format(Y[i]) + ''.join(r))
+        i += 1
+#print_coords()
 '''
 A = (0,0,0)
 B = (0,4,0)

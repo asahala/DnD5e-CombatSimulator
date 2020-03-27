@@ -54,7 +54,18 @@ class DnDRuleset:
         """ Check if attack hits """
         if hitroll == 1:
             hit = False
-            msg = "fails critically attacking"
+            # TODO: CRITICAL FAILURES
+            roll = dice.roll(times=1, sides=4, bonus=0)
+            if roll == 1:
+                source.set_prone(True)
+                msg = "falls prone due to critical FAILURE attacking"
+            elif roll == 2:
+                dmg = dice.roll(times=1, sides=6, bonus=0)
+                source.hp -= dmg
+                msg = "hurts itself (%i dmg) and falls prone due to critical FAILURE attacking" % dmg
+                source.set_prone(True)
+            else:
+                msg = "FAILS critically attacking"
         elif hitroll == 20:
             hit = True
             msg = "lands a CRITICAL hit on"

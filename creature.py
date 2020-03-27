@@ -293,8 +293,10 @@ class Basecreature(object):
 
     def set_prone(self, state):
         if state:
+            #messages.IO.conditions.append("-> %s falls prone. " % self.name)
             messages.IO.printmsg("-> %s falls prone. " % self.name, 2, True, False)
         else:
+            #messages.IO.conditions.append("%s stands up. " % self.name)
             messages.IO.printmsg("%s stands up. " % self.name, 2, True, True)
         self.set_advantage('hit', -1)
         self.prone = state
@@ -386,7 +388,6 @@ class Basecreature(object):
                 return False
             else:
                 points, new_pos = world.close_distance(self, path, weapon.reach)
-
         elif distance < weapon.reach and weapon.ranged:
             """ If using ranged weapon, keep distance """
             path = world.get_opposite(A, B, self)
@@ -536,6 +537,7 @@ class Party:
             else:
                 k = i
             creature.position = (x+k, y+j, z)
+            world.occupied.append([creature.position, creature.name])
             i += 1
 
 spider_web = Restrain(name="Web", dc=11, save='str', to_hit=5, recharge=5)
@@ -806,6 +808,9 @@ class Encounter:
         messages.IO.printmsg(self.party1.__repr__(), 1)
         messages.IO.printmsg(self.party2.__repr__(), 1)
 
+        world.print_coords()
+        world.occupied = []
+
         round = 1
         while self.party1.is_alive and self.party2.is_alive:
             turn = 1
@@ -822,6 +827,13 @@ class Encounter:
                 """ Count turns only for living creatures """
                 if not creature.is_dead:
                     turn += 1
+                    world.occupied.append([creature.position, creature.name])
+                else:
+                    world.occupied.append([creature.position, ' † '])
+
+            world.print_coords()
+            world.occupied = []
+
             round += 1
 
         if self.party1.is_alive:
@@ -832,6 +844,15 @@ class Encounter:
             messages.IO.printmsg("\n%s wins!" % self.party2.name, level=1)
             return self.party2.name
 
+        # TODO better: draw end state
+        for creature in self.order_of_action:
+            if not creature.is_dead:
+                world.occupied.append([creature.position, creature.name])
+            else:
+                world.occupied.append([creature.position, ' † '])
+
+        world.print_coords()
+        world.occupied = []
 
 i = 0
 results = []
@@ -841,15 +862,41 @@ while i < 1:
     team1 = Party(name='Team A')
     team1.add(copy.deepcopy(skeleton))
     team1.add(copy.deepcopy(skeleton))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
     team1.set_formation((0,3,0))
 
 
     team2 = Party(name='Team B')
-    team2.add(copy.deepcopy(zombie))
+    team2.add(copy.deepcopy(dire_wolf))
+    team2.add(copy.deepcopy(dire_wolf))
+    team2.add(copy.deepcopy(dire_wolf))
+    team2.add(copy.deepcopy(dire_wolf))
+    team2.add(copy.deepcopy(dire_wolf))
+    team2.add(copy.deepcopy(dire_wolf))
+    team2.add(copy.deepcopy(dire_wolf))
+    team2.add(copy.deepcopy(black_bear))
+    team2.add(copy.deepcopy(black_bear))
     team2.set_formation((0,-3,0))
 
 
     x = Encounter(team1, team2)
+
     results.append(x.fight())
     i += 1
 
