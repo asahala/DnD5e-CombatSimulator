@@ -69,8 +69,15 @@ def get_path(A, B):
     return [i for i in zip(pathx, pathy, pathz)]
 
 def is_adjacent(A, B):
-    """ Return True if A is adjacent to B """
-    return 1 in [abs(a-b) for a,b in zip(A, B)]
+    """ Return True if A is adjacent (or overlapping) to B """
+    x0, y0, z0 = A
+    x1, y1, z1 = B
+
+    diff_x = abs(x0-x1) in [1, 0]
+    diff_y = abs(y0-y1) in [1, 0]
+    diff_z = abs(z0-z1) in [1, 0]
+
+    return all([diff_x, diff_y, diff_z])
 
 def get_opposite(A, B, creature):
     """ Return path to the most distant coordinate to B
@@ -156,3 +163,7 @@ path = get_opposite(A, B, speed)
 d, c = move_to_farthest(A, path, speed, reach)
 print(d, c)
 '''
+
+A = (19, 8, 0)
+B = (-20, -7, -0)
+print(is_adjacent(A,B))

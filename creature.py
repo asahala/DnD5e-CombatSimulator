@@ -409,6 +409,12 @@ class Basecreature(object):
         else:
             attacks = self.melee_attacks
 
+        for e in enemies.members:
+            if world.is_adjacent(self.position, e.position):
+                attacks = self.melee_attacks
+                #print(self.name, ' is next to ', e.name)
+                break
+
         '''
         if True in [world.is_adjacent(self.position, e.position)
                     for e in enemies.members]:
@@ -833,6 +839,7 @@ messages.VERBOSE_LEVEL = 3
 while i < 1:
     print("Match %i" % i)
     team1 = Party(name='Team A')
+    team1.add(copy.deepcopy(skeleton))
     team1.add(copy.deepcopy(skeleton))
     team1.set_formation((0,3,0))
 
