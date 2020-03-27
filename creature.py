@@ -18,7 +18,7 @@ from mechanics import DnDRuleset as R
 class Basecreature(object):
 
     def __init__(self, name, size, category, cr, ac, hp, speed,
-                 scores, melee_attacks, ranged_attacks=[], actions=[],
+                 scores, melee_attacks, multi_attacks=[], ranged_attacks=[], actions=[],
                  speed_fly = 0,
                  saves=None,
                  passives=[],
@@ -40,6 +40,7 @@ class Basecreature(object):
 
         self.melee_attacks = melee_attacks
         self.ranged_attacks = ranged_attacks
+        self.multi_attacks = multi_attacks
 
         self.actions = actions
         self.passives = passives
@@ -95,7 +96,7 @@ class Basecreature(object):
         self.position = (0,0,0)
 
         #TODO movement
-        self.distance = 30
+        self.distance = 0
 
     def __repr__(self):
         CR = {0.125: "1/8", 0.25: "1/4", 0.5: "1/2"}
@@ -191,7 +192,7 @@ class Basecreature(object):
         actions such as standing up, recharging abilities etc.
 
         Return True if creature did not use its action """
-
+        self.distance = 0
         self.speed = self.max_speed.copy()
 
         """ Recharge abilities """
@@ -235,15 +236,31 @@ class Basecreature(object):
             if R.roll_save(self, ability, dc):
                 self.set_paralysis(False, dc=0, save=None)
 
-    def take_damage(self, damage, dmg_type, crit_multiplier):
+    def take_damage(self, source, damage, dmg_type, crit_multiplier):
+
+        """ Check if creature has vulnerability, resistance or immunity
+            to the given damage type """
+        damage = self.check_resistances(dmg_type, damage)
+        damage = self.check_vulnerabilities(dmg_type, damage)
+
+        """ Store damage statistics """
+        source.damage_dealt += damage
 
         self.hp -= damage
 
+        messages.IO.total_damage.setdefault(dmg_type, 0)
+        messages.IO.total_damage[dmg_type] += damage
+        messages.IO.hp = self.hp
+        messages.IO.target_name = self.name
+        messages.IO.printlog()
         """ Check if creature can drop to 1 HP instead of 0 """
         if self.hp <= 0 and self.passives:
             for passive in self.passives:
                 if passive.type == 'avoid_death':
                     self.hp = passive.use(self, damage, dmg_type, crit_multiplier)
+
+        if self.is_dead:
+            messages.IO.printmsg("-> %s is dead. " % self.name, 2, True, False)
 
     def set_grapple(self, state, dc=0, save='str', source=None):
         if state:
@@ -295,19 +312,21 @@ class Basecreature(object):
         if state:
             #messages.IO.conditions.append("-> %s falls prone. " % self.name)
             messages.IO.printmsg("-> %s falls prone. " % self.name, 2, True, False)
+            self.set_advantage('hit', -1)
         else:
             #messages.IO.conditions.append("%s stands up. " % self.name)
             messages.IO.printmsg("%s stands up. " % self.name, 2, True, True)
-        self.set_advantage('hit', -1)
+            self.set_advantage('hit', 0)
+
         self.prone = state
 
     def set_poison(self, state, dc=0, save='con'):
         if not 'poison' in self.immunities:
             if state:
                 messages.IO.printmsg("-> %s is poisoned. " % self.name, 2, True, False)
-                self.set_advantage('hit', 0)
-            else:
                 self.set_advantage('hit', -1)
+            else:
+                self.set_advantage('hit', 0)
                 messages.IO.printmsg("%s recovers from poison. " % self.name, 2, True, True)
             self.poisoned["state"] = state
             self.poisoned["dc"] = dc
@@ -399,34 +418,46 @@ class Basecreature(object):
             return False
 
     def select_weapon(self, enemies):
-        """ Use melee weapon unless adjacent to an enemy """
 
+        def pick():
+            attacks = []
+            min_distance = 0
+            for weapon in self.melee_attacks:
+                if isinstance(weapon, list):
+                    for subweapon in weapon:
+                        if subweapon.special:
+                            attacks = [weapon]
+                            min_distance = weapon.min_distance
+                else:
+                    if weapon.special:
+                        attacks = [weapon]
+                        min_distance = weapon.min_distance
+            return attacks, min_distance
+
+        """ Priority 1: Use a weapon with special ability """
+        attacks, min_distance = pick()
+
+        """ Override priority: If ranged weapon is available, use it """
         if self.ranged_attacks:
             opts = [a for a in self.ranged_attacks if a.ammo > 0]
             if opts:
                 attacks = opts
             else:
                 attacks = self.melee_attacks
-        else:
+
+        """ If not chosen yet, pick one melee attack """
+        if not attacks:
             attacks = self.melee_attacks
 
+        """ Override choice if next to enemy """
         for e in enemies.members:
             if world.is_adjacent(self.position, e.position):
-                attacks = self.melee_attacks
-                #print(self.name, ' is next to ', e.name)
+                if isinstance(attacks[0], list):
+                    pass
+                else:
+                    attacks = [x for x in self.melee_attacks if x.min_distance <= 5]
                 break
 
-        '''
-        if True in [world.is_adjacent(self.position, e.position)
-                    for e in enemies.members]:
-            attacks = self.melee_attacks
-        else:
-            if self.ranged_attacks:
-                options = [a for a in self.ranged_attacks if a.ammo > 0]
-                if options:
-                    attacks = options
-            else:
-                attacks = self.melee_attacks'''
         return random.choice(attacks)
 
     def perform_action(self, allies, enemies):
@@ -541,7 +572,7 @@ class Party:
             i += 1
 
 spider_web = Restrain(name="Web", dc=11, save='str', to_hit=5, recharge=5)
-# minotaur_gore = Gore(name="Gore", dc=14, save='str', to_hit=6, damage=["4d8+4"], damage_type=["piercing"])
+#minotaur_gore = Gore(name="Gore", dc=14, save='str', to_hit=6, damage=["4d8+4"], damage_type=["piercing"])
 pack_tactics = PackTactics
 
 wolf_bite = Weapon(name='bite',
@@ -596,6 +627,7 @@ lion_pounce = Weapon(name='pounce',
                      damage=["1d6+3"],
                      damage_type=["slashing"],
                      reach=5,
+                     min_distance=20,
                      to_hit=5,
                      special=[Knockdown(name="pounce", dc=13, save='str',
                                         charge_distance=20,
@@ -651,18 +683,27 @@ black_bear = Basecreature(name='black bear', cr=0.5, ac=11, hp=19, speed=40,
                           category="beast",
                           scores={'str': 15, 'dex': 10, 'con': 14,
                                   'int': 2, 'wis': 12, 'cha': 7},
-                          melee_attacks=[(Weapon(name='bite', damage=["1d6+2"], damage_type=["piercing"], reach=5, to_hit=3),
+                          melee_attacks=[[Weapon(name='bite', damage=["1d6+2"], damage_type=["piercing"], reach=5, to_hit=3),
                                     Weapon(name='claws', damage=["2d4+2"], damage_type=["slashing"], reach=5,
-                                           to_hit=3))])
+                                           to_hit=3)]])
 
 brown_bear = Basecreature(name='brown bear', cr=1, ac=11, hp=34, speed=40,
                           size='large',
                           category="beast",
                           scores={'str': 19, 'dex': 10, 'con': 16,
                                   'int': 2, 'wis': 13, 'cha': 7},
-                          melee_attacks=[(Weapon(name='bite', damage=["1d8+4"], damage_type=["piercing"], reach=5, to_hit=5),
-                                    Weapon(name='claws', damage=["2d6+4"], damage_type=["slashing"], reach=5,
-                                           to_hit=5))])
+                          melee_attacks=[
+                              [Weapon(name='bite',
+                                      damage=["1d8+4"],
+                                      damage_type=["piercing"],
+                                      reach=5,
+                                      to_hit=5),
+                               Weapon(name='claws',
+                                      damage=["2d6+4"],
+                                      damage_type=["slashing"],
+                                      reach=5,
+                                      to_hit=5)]
+                          ])
 
 crocodile = Basecreature(name='crocodile', cr=0.5, ac=12, hp=19, speed=20,
                          size='large',
@@ -692,7 +733,7 @@ lion = Basecreature(name='lion', cr=1, ac=12, hp=26, speed=50,
                     category="beast",
                     scores={'str': 17, 'dex': 15, 'con': 13,
                             'int': 3, 'wis': 12, 'cha': 8},
-                    melee_attacks=[lion_bite, lion_claw, lion_pounce],
+                    melee_attacks=[lion_pounce, lion_bite, lion_claw],
                     passives=[pack_tactics])
 
 mammoth = Basecreature(name='mammoth', cr=6, ac=13, hp=126, speed=40,
@@ -860,38 +901,13 @@ messages.VERBOSE_LEVEL = 3
 while i < 1:
     print("Match %i" % i)
     team1 = Party(name='Team A')
-    team1.add(copy.deepcopy(skeleton))
-    team1.add(copy.deepcopy(skeleton))
-    team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(black_bear))
+    team1.add(copy.deepcopy(brown_bear))
     team1.set_formation((0,3,0))
 
 
     team2 = Party(name='Team B')
-    team2.add(copy.deepcopy(dire_wolf))
-    team2.add(copy.deepcopy(dire_wolf))
-    team2.add(copy.deepcopy(dire_wolf))
-    team2.add(copy.deepcopy(dire_wolf))
-    team2.add(copy.deepcopy(dire_wolf))
-    team2.add(copy.deepcopy(dire_wolf))
-    team2.add(copy.deepcopy(dire_wolf))
-    team2.add(copy.deepcopy(black_bear))
-    team2.add(copy.deepcopy(black_bear))
+    team2.add(copy.deepcopy(minotaur))
     team2.set_formation((0,-3,0))
 
 

@@ -15,14 +15,6 @@ class Movement:
 class DnDRuleset:
 
     @staticmethod
-    def parse_damage_type(damage_type):
-        """ Parse damage types such as poison(DC:con:0.5:11) that
-         contain, type, saving throw, damage multiplier if
-         successful and DC  """
-        dmg_type = re.sub("\(.+$", "", damage_type)
-        return re.sub('.*\((.+)\).*', r'\1', damage_type).split(':') + [dmg_type]
-
-    @staticmethod
     def roll_hit(source, target, attack):
         """ Genera hit roller
         :param source     source of attack (creature object)
@@ -39,7 +31,6 @@ class DnDRuleset:
             source.set_advantage('hit', 1)
 
         advantage = source.advantage['hit']
-
         hitroll = dice.roll(1, 20, 0, advantage)
             
         """ Apply critical multiplier """
@@ -51,19 +42,16 @@ class DnDRuleset:
             multiplier = 2
 
 
+        critical_failure_effect = False
+
         """ Check if attack hits """
         if hitroll == 1:
             hit = False
             # TODO: CRITICAL FAILURES
-            roll = dice.roll(times=1, sides=4, bonus=0)
+            roll = dice.roll(times=1, sides=3, bonus=0)
             if roll == 1:
-                source.set_prone(True)
                 msg = "falls prone due to critical FAILURE attacking"
-            elif roll == 2:
-                dmg = dice.roll(times=1, sides=6, bonus=0)
-                source.hp -= dmg
-                msg = "hurts itself (%i dmg) and falls prone due to critical FAILURE attacking" % dmg
-                source.set_prone(True)
+                critical_failure_effect = True
             else:
                 msg = "FAILS critically attacking"
         elif hitroll == 20:
@@ -76,15 +64,28 @@ class DnDRuleset:
             hit = False
             msg = "misses"
 
+        if advantage == 1:
+            adv = ' (adv.)'
+        elif advantage == -1:
+            adv = ' (disadv.)'
+        else:
+            adv = ''
+
         messages.IO.log += "{source} {hit} {target}"\
-                  " with {attackname}.".format(source=source.name,
+                  " with {attackname}{adv}.".format(source=source.name,
                                                target=target.name,
                                                attackname=attack_name,
-                                               hit=msg)
+                                               hit=msg,
+                                               adv=adv)
 
         if not hit:
             messages.IO.printlog()
             messages.IO.reset()
+
+        """ Set critical failure effects """
+        if critical_failure_effect:
+            source.set_prone(True)
+            source.take_damage(source, 4, 'bludgeoning', 1)
 
         return hit, multiplier, hitroll + bonus
 
@@ -112,7 +113,7 @@ class DnDRuleset:
             dmg = weapon.damage[i]
             dmg_type = weapon.damage_type[i]
             DnDRuleset.roll_damage(source, target, weapon, dmg, dmg_type, crit_multiplier)
-        messages.IO.printlog()
+
 
     @staticmethod
     def roll_damage(source, target, weapon, dmg, dmg_type, crit_multiplier=1):
@@ -132,20 +133,15 @@ class DnDRuleset:
 
         """ Check if target has resistance or immunity to 
         the given damage type """
-        damage = target.check_resistances(dmg_type, damage)
+        #damage = target.check_resistances(dmg_type, damage)
 
         """ Check vulnerabilities """
-        damage = target.check_vulnerabilities(dmg_type, damage)
+        #damage = target.check_vulnerabilities(dmg_type, damage)
 
         """ Store damage statistics """
-        source.damage_dealt += damage
+        #source.damage_dealt += damage
 
         """ Subtract damage from target's HP pool """
-        target.take_damage(damage, dmg_type, crit_multiplier)
-
-        messages.IO.total_damage.setdefault(dmg_type, 0)
-        messages.IO.total_damage[dmg_type] += damage
-        messages.IO.hp = target.hp
-        messages.IO.target_name = target.name
+        target.take_damage(source, damage, dmg_type, crit_multiplier)
 
 

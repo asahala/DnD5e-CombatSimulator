@@ -36,9 +36,9 @@ class IO:
         for condition in IO.conditions:
             IO.printmsg("-> " + condition, 2, True, False)
 
-        if IO.hp <= 0 and IO.target_name:
-            death = "-> %s is dead!" % IO.target_name
-            IO.printmsg(death, 2, True, False)
+        #if IO.hp <= 0 and IO.target_name:
+        #    death = "-> %s is dead!" % IO.target_name
+        #    IO.printmsg(death, 2, True, False)
 
     @staticmethod
     def center_and_pad(string, padding=":"):

@@ -2,6 +2,7 @@ import random
 import re
 
 def roll(times, sides, bonus, advantage=0):
+
     if advantage == -1:
         #print('disadvantage')
         return min(roll(times, sides, bonus), roll(times, sides, bonus))

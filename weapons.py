@@ -18,11 +18,13 @@ Weapon class
 class Weapon(object):
 
     def __init__(self, name, damage, damage_type,
-                 reach, to_hit, ammo=0, ranged=False, number_of_targets=1,
+                 reach, to_hit, min_distance=0, ammo=0, ranged=False,
+                 number_of_targets=1,
                  special=[]):
 
         self.type = 'weapon'
         self.ammo = ammo
+        self.min_distance = min_distance
         self.ranged = ranged
         self.name = name
         self.damage_print = damage

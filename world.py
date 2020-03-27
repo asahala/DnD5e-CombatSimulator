@@ -107,6 +107,9 @@ def close_distance(creature, path, reach, run=False):
     """ Store start position """
     sx, sy, sz = creature.position
 
+    if creature.speed['ground'] <= 0:
+        return 0, creature.position
+
     """ Set speed multiplier if running """
     if run:
         multi = 2
@@ -123,10 +126,11 @@ def close_distance(creature, path, reach, run=False):
         x, y, z = coordinates
         distance = get_dist(creature.position, coordinates)
         if creature.speed['ground'] * multi >= distance:
-            creature.position = coordinates       # Set new position
-            creature.speed['ground'] -= distance  # Subtract movement points
+            creature.position = coordinates
+            creature.speed['ground'] = max(creature.speed['ground'] - distance, 0)
+            creature.distance = distance
             msg = "%s %s %i ft. from (%i, %i, %i) to (%i, %i, %i)" \
-                  % (creature.name, moves, d, sx, sy, sz, x,y,z)
+                  % (creature.name, moves, distance, sx, sy, sz, x,y,z)
             messages.IO.printmsg(msg, level=3, indent=True, print_turn=True)
             return distance, coordinates
 
@@ -154,37 +158,40 @@ def keep_distance(creature, enemy, path, reach):
     print('KEEP DISTANCE ERROR')
 
 def print_coords():
-    X = [i for i in range(-20,0)] + [i for i in range(0,21)]
-    Y = [i for i in range(20,0,-1)] + [i for i in range(0,-21, -1)]
 
-    def format(c):
-        c = str(c)
-        if len(c) == 3:
-            return c
-        if len(c) == 2:
-            return c + " "
-        else:
-            return " " + c + " "
+    if messages.VERBOSE_LEVEL == 4:
+        X = [i for i in range(-20,0)] + [i for i in range(0,21)]
+        Y = [i for i in range(20,0,-1)] + [i for i in range(0,-21, -1)]
 
-    print('   ' + "".join([format(x) for x in X]))
+        def format(c):
+            c = str(c)
+            if len(c) == 3:
+                return c
+            if len(c) == 2:
+                return c + " "
+            else:
+                return " " + c + " "
 
-    rows = []
-    for y in Y:
-        cols = []
-        for x in X:
-            symbol = "   "
-            for pos, c in occupied:
-                px, py, pz = pos
-                if x == px and y == py:
-                    symbol = c[0:3]
-            cols.append(symbol)
+        print('   ' + "".join([format(x) for x in X]))
 
-        rows.append(cols)
+        rows = []
+        for y in Y:
+            cols = []
+            for x in X:
+                symbol = "   "
+                for pos, c in occupied:
+                    px, py, pz = pos
+                    if x == px and y == py:
+                        symbol = c[0:3]
+                cols.append(symbol)
 
-    i = 0
-    for r in rows:
-        print(format(Y[i]) + ''.join(r))
-        i += 1
+            rows.append(cols)
+
+        i = 0
+        for r in rows:
+            print(format(Y[i]) + ''.join(r))
+            i += 1
+
 #print_coords()
 '''
 A = (0,0,0)
