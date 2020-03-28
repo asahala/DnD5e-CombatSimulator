@@ -212,6 +212,12 @@ class Basecreature(object):
             self.speed['ground'] = 0
             if self.grappled["by"].is_dead:
                 self.set_grapple(state=False, dc=0, save='str', source=None)
+            else:
+                dc = self.grappled["dc"]
+                ability = self.grappled["save"]
+                if R.roll_save(self, ability, dc):
+                    self.set_grapple(False, dc=0, save=None)
+                    return False
 
         if self.paralyzed["state"]:
             self.speed['fly'] = 0
@@ -439,7 +445,10 @@ class Basecreature(object):
 
         """ Override priority: If ranged weapon is available, use it """
         if self.ranged_attacks:
-            opts = [a for a in self.ranged_attacks if a.ammo > 0]
+            if isinstance(self.ranged_attacks[0], list):
+                opts = self.ranged_attacks
+            else:
+                opts = [a for a in self.ranged_attacks if a.ammo > 0]
             if opts:
                 attacks = opts
             else:
@@ -455,7 +464,8 @@ class Basecreature(object):
                 if isinstance(attacks[0], list):
                     pass
                 else:
-                    attacks = [x for x in self.melee_attacks if x.min_distance <= 5]
+                    attacks = [x for x in self.melee_attacks
+                               if x.min_distance <= 5]
                 break
 
         return random.choice(attacks)
@@ -466,7 +476,8 @@ class Basecreature(object):
             if not self.is_incapacitated:
                 may_act = self.begin_turn()
                 self.check_passives(allies, enemies)
-                self.attack(enemies)
+                if may_act:
+                    self.attack(enemies)
             self.end_turn()
 
     def attack(self, enemies):
@@ -572,7 +583,6 @@ class Party:
             i += 1
 
 spider_web = Restrain(name="Web", dc=11, save='str', to_hit=5, recharge=5)
-#minotaur_gore = Gore(name="Gore", dc=14, save='str', to_hit=6, damage=["4d8+4"], damage_type=["piercing"])
 pack_tactics = PackTactics
 
 wolf_bite = Weapon(name='bite',
@@ -704,6 +714,57 @@ brown_bear = Basecreature(name='brown bear', cr=1, ac=11, hp=34, speed=40,
                                       reach=5,
                                       to_hit=5)]
                           ])
+
+
+ognon_kirves = Weapon(name='greataxe +2',
+                      damage=["1d10+1", "1d6+3"],
+                      damage_type=["slashing", "fire"],
+                      reach=5,
+                      to_hit=8)
+
+ogno = Basecreature(name='Ogno', cr=2, ac=18, hp=120, speed=40,
+                         size='medium',
+                         category="humanoid",
+                         resistances=['piercing', 'slashing'],
+                         scores={'str': 18, 'dex': 16, 'con': 16,
+                                 'int': 12, 'wis': 14, 'cha': 10},
+                         saves={'str': 8, 'dex': 3, 'con': 7,
+                                  'int': 1, 'wis': 1, 'cha': 0},
+                         melee_attacks=[[ognon_kirves, ognon_kirves]])
+
+
+gerun_jousi = Weapon(name='longbow +2',
+                      damage=["1d8+24"],
+                      damage_type=["piercing"],
+                      reach=300,
+                      ammo=20,
+                      ranged=True,
+                      to_hit=7)
+
+gerun_jousi2 = Weapon(name='longbow +2',
+                      damage=["2d8+12"],
+                      damage_type=["piercing"],
+                      reach=300,
+                      ammo=20,
+                      ranged=True,
+                      to_hit=12)
+
+tarmal_cleaver = Weapon(name='tarmal cleaver +1',
+                      damage=["1d8+7"],
+                      damage_type=["slashing"],
+                      reach=5,
+                      to_hit=7)
+
+geru = Basecreature(name='Geru', cr=2, ac=17, hp=91, speed=30,
+                         size='medium',
+                         category="humanoid",
+                         scores={'str': 15, 'dex': 18, 'con': 14,
+                                 'int': 11, 'wis': 13, 'cha': 8},
+                         saves={'str': 6, 'dex': 8, 'con': 2,
+                                  'int': 0, 'wis': 1, 'cha': -1},
+                         melee_attacks=[[tarmal_cleaver, tarmal_cleaver]],
+                         ranged_attacks=[[gerun_jousi, gerun_jousi2]],
+                    )
 
 crocodile = Basecreature(name='crocodile', cr=0.5, ac=12, hp=19, speed=20,
                          size='large',
@@ -897,17 +958,16 @@ class Encounter:
 
 i = 0
 results = []
-messages.VERBOSE_LEVEL = 3
-while i < 1:
+messages.VERBOSE_LEVEL = 0
+while i < 1000:
     print("Match %i" % i)
     team1 = Party(name='Team A')
-    team1.add(copy.deepcopy(black_bear))
-    team1.add(copy.deepcopy(brown_bear))
+    team1.add(copy.deepcopy(geru))
     team1.set_formation((0,3,0))
 
 
     team2 = Party(name='Team B')
-    team2.add(copy.deepcopy(minotaur))
+    team2.add(copy.deepcopy(ogno))
     team2.set_formation((0,-3,0))
 
 
