@@ -725,7 +725,7 @@ ognon_kirves = Weapon(name='greataxe +2',
 ogno = Basecreature(name='Ogno', cr=2, ac=18, hp=120, speed=40,
                          size='medium',
                          category="humanoid",
-                         resistances=['piercing', 'slashing'],
+                         resistances=['piercing', 'slashing', 'bludgeoning'],
                          scores={'str': 18, 'dex': 16, 'con': 16,
                                  'int': 12, 'wis': 14, 'cha': 10},
                          saves={'str': 8, 'dex': 3, 'con': 7,
@@ -958,18 +958,25 @@ class Encounter:
 
 i = 0
 results = []
-messages.VERBOSE_LEVEL = 0
-while i < 1000:
+messages.VERBOSE_LEVEL = 2
+while i < 1:
     print("Match %i" % i)
     team1 = Party(name='Team A')
-    team1.add(copy.deepcopy(geru))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(zombie))
     team1.set_formation((0,3,0))
 
-
     team2 = Party(name='Team B')
-    team2.add(copy.deepcopy(ogno))
+    team2.add(copy.deepcopy(mammoth))
     team2.set_formation((0,-3,0))
-
 
     x = Encounter(team1, team2)
 
