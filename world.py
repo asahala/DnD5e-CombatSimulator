@@ -7,10 +7,58 @@ import messages
 
 occupied = []
 
+class Map:
+
+    paths = {}
+    coords = {}
+    occupied = {}
+
+    @staticmethod
+    def update(creature):
+        """ Update world map with creature positions and mark
+        restricted coordinates. Corpses do not restrict movement. """
+        if creature.is_dead:
+            symbol = ' † '
+        else:
+            symbol = creature.name
+            Map.occupied[creature.position] = creature.party
+        Map.coords.setdefault(creature.position, []).append(symbol)
+
+    @staticmethod
+    def reset():
+        Map.coords = {}
+        #Map.occupied = {}
+        Map.paths = {}
+
+    @staticmethod
+    def get_penalty(creature, coordinates):
+        """ Check if coordinates on path are blocked. Double movement
+        if ally, quadruple if enemy (assume that going around the
+         occupied enemy position consumes 15 ft of movement) """
+        occupied_by = Map.occupied.get(coordinates, None)
+        if occupied_by is None:
+            return 0
+        elif occupied_by == creature.party:
+            return 5
+        else:
+            return 15
+
 def get_dist(A, B):
     """ Return distance between coordinates A and B in ft.
     this is the exact movement cost from A to B """
     return round(math.sqrt(sum([(s - d) ** 2 for s, d, in zip(A, B)]))) * 5
+
+def get_adjacent(coords):
+    x, y, z = coords
+    for dx in [-1,1,0]:
+        for dy in [-1,1,0]:
+            nx = x + dx
+            ny = y + dy
+            npos = (nx, ny, z)
+            if not npos in Map.occupied and npos != coords:
+            #if Map.occupied.get((nx,ny,z), None) is None:
+                yield nx, ny, z
+    return coords
 
 def get_path(A, B):
     """ Rerturn all coordinates between two points in three-dimensional
@@ -23,6 +71,16 @@ def get_path(A, B):
 
     def make_path(s, d, j):
         return [i for i in range(s, d + j, j)]
+
+    """ Check if destination is obstructed, try to find closest
+     square adjacent to the destination """
+    if B in Map.occupied:
+        adjacent = list(get_adjacent(B))
+        """ Return False if all adjacent cells are occupied """
+        # TODO: Make creature target someone else
+        if not adjacent:
+            return False
+        B = min(sorted([(get_dist(A, x), x) for x in adjacent]))[-1]
 
     x0, y0, z0 = A
     x1, y1, z1 = B
@@ -103,11 +161,12 @@ def get_opposite(A, B, creature):
 
     return get_path(A, (x0 + round(f*ix), y0 + round(f*iy), 0))
 
-def close_distance(creature, path, reach, run=False):
+
+def __close_distance(creature, path, reach, run=False):
     """ Store start position """
     sx, sy, sz = creature.position
 
-    if creature.speed['ground'] <= 0:
+    if creature.speed['ground'] < 5:
         return 0, creature.position
 
     """ Set speed multiplier if running """
@@ -136,6 +195,60 @@ def close_distance(creature, path, reach, run=False):
 
     print('CLOSE DISTANCE ERROR')
 
+
+def close_distance(creature, path, reach, run=False):
+    """ Store start position """
+    sx, sy, sz = creature.position
+
+    """ Set speed multiplier if running """
+    if run:
+        move_points = creature.speed['ground'] * 2
+        moves = "runs"
+    else:
+        move_points = creature.speed['ground']
+        moves = "moves"
+
+    """ Disallow moving if moving points are depleted """
+    if move_points < 5 or not path:
+        return 0, creature.position
+
+    """ Get enemy positions in the map that are not in the path """
+    enemy_pos = [pos for pos, party in Map.occupied.items()
+                if party != creature.party and pos not in path]
+
+    penalty = 0
+    distance = 0
+    coordinates = creature.position
+    for coordinates in path:
+
+        Map.paths[coordinates] = " ● "
+
+        """ Check if enemies are occupying coordinates next to the
+        current position, add 5 ft penalty for each """
+        if enemy_pos:
+            adjacent = [is_adjacent(coordinates, B) for B in enemy_pos]
+            penalty += sum(adjacent) * 5
+
+        """ Check if creatures are blocking the path. Add 15 ft penalty
+        for enemies and 5 ft for allies """
+        base_cost = get_dist(creature.position, coordinates)
+        penalty += Map.get_penalty(creature, coordinates)
+        distance = base_cost + penalty
+
+        if move_points == distance:
+            break
+
+    creature.speed['ground'] = max(creature.speed['ground'] - distance, 0)
+    creature.position = coordinates
+
+
+    x, y, z = coordinates
+    msg = "%s %s %i ft. from (%i, %i, %i) to (%i, %i, %i)" \
+          % (creature.name, moves, distance, sx, sy, sz, x, y, z)
+    messages.IO.printmsg(msg, level=3, indent=True, print_turn=True)
+
+    return distance, coordinates
+
 def keep_distance(creature, enemy, path, reach):
 
     """ Store start position """
@@ -159,9 +272,14 @@ def keep_distance(creature, enemy, path, reach):
 
 def print_coords():
 
+    size = 12
+
+    #for k,v in Map.coords.items():
+    #    print(k, v)
+
     if messages.VERBOSE_LEVEL == 4:
-        X = [i for i in range(-20,0)] + [i for i in range(0,21)]
-        Y = [i for i in range(20,0,-1)] + [i for i in range(0,-21, -1)]
+        X = [i for i in range(-size,0)] + [i for i in range(0,size+1)]
+        Y = [i for i in range(size,0,-1)] + [i for i in range(0,-size+1, -1)]
 
         def format(c):
             c = str(c)
@@ -178,11 +296,12 @@ def print_coords():
         for y in Y:
             cols = []
             for x in X:
-                symbol = "   "
+                POS = (x, y, 0)
+                symbol = Map.paths.get(POS, " ∙ ")
                 for pos, c in occupied:
                     px, py, pz = pos
                     if x == px and y == py:
-                        symbol = c[0:3]
+                        symbol = c[0:2] + c[-1]
                 cols.append(symbol)
 
             rows.append(cols)
@@ -205,6 +324,11 @@ d, c = move_to_farthest(A, path, speed, reach)
 print(d, c)
 '''
 
-A = (19, 8, 0)
-B = (-20, -7, -0)
-print(is_adjacent(A,B))
+#A = (19, 8, 0)
+#B = (-20, -7, -0)
+#print(is_adjacent(A,B))
+
+#A = (0,0,0)
+
+#for x in get_adjacent(A):
+#    print(x)

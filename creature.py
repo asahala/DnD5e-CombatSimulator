@@ -190,7 +190,6 @@ class Basecreature(object):
     def begin_turn(self):
         """ At the beginning of each turn, perform a list of
         actions such as standing up, recharging abilities etc.
-
         Return True if creature did not use its action """
         self.distance = 0
         self.speed = self.max_speed.copy()
@@ -579,6 +578,7 @@ class Party:
             else:
                 k = i
             creature.position = (x+k, y+j, z)
+            world.Map.update(creature)
             world.occupied.append([creature.position, creature.name])
             i += 1
 
@@ -722,7 +722,7 @@ ognon_kirves = Weapon(name='greataxe +2',
                       reach=5,
                       to_hit=8)
 
-ogno = Basecreature(name='Ogno', cr=2, ac=18, hp=120, speed=40,
+ogno = Basecreature(name='Ogno', cr=4, ac=18, hp=120, speed=40,
                          size='medium',
                          category="humanoid",
                          resistances=['piercing', 'slashing', 'bludgeoning'],
@@ -911,7 +911,8 @@ class Encounter:
         messages.IO.printmsg(self.party2.__repr__(), 1)
 
         world.print_coords()
-        world.occupied = []
+        #world.occupied = []
+        world.Map.reset()
 
         round = 1
         while self.party1.is_alive and self.party2.is_alive:
@@ -933,8 +934,11 @@ class Encounter:
                 else:
                     world.occupied.append([creature.position, ' † '])
 
+                world.Map.update(creature)
+
             world.print_coords()
-            world.occupied = []
+            #world.occupied = {}
+            world.Map.reset()
 
             round += 1
 
@@ -950,37 +954,54 @@ class Encounter:
         for creature in self.order_of_action:
             if not creature.is_dead:
                 world.occupied.append([creature.position, creature.name])
+                #world.update_map(creature)
             else:
                 world.occupied.append([creature.position, ' † '])
+            world.Map.update(creature)
 
         world.print_coords()
         world.occupied = []
+        world.Map.reset
 
+matches = 1
 i = 0
 results = []
-messages.VERBOSE_LEVEL = 2
-while i < 1:
+messages.VERBOSE_LEVEL = 4
+dmg_tablesA = {}
+dmg_tablesB = {}
+
+while i < matches:
     print("Match %i" % i)
     team1 = Party(name='Team A')
     team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
-    team1.add(copy.deepcopy(zombie))
     team1.set_formation((0,3,0))
 
+
     team2 = Party(name='Team B')
-    team2.add(copy.deepcopy(mammoth))
+    team2.add(copy.deepcopy(black_bear))
     team2.set_formation((0,-3,0))
+
 
     x = Encounter(team1, team2)
 
     results.append(x.fight())
+
+    for character in team1.members:
+        dmg_tablesA.setdefault(character.name, []).append(character.damage_dealt)
+    for character in team2.members:
+        dmg_tablesB.setdefault(character.name, []).append(character.damage_dealt)
+
     i += 1
 
-print(Counter(results).items())
+x = dict(Counter(results).items())
+for k,v in Counter(results).items():
+    print(k, " wins:", x[k] / matches)
+
+print("\nAvg. damage Team A")
+for k, v in dmg_tablesA.items():
+    print(k, sum(v)/len(v))
+
+
+print("\nAvg. damage Team B")
+for k, v in dmg_tablesB.items():
+    print(k, sum(v)/len(v))
