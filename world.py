@@ -5,29 +5,40 @@ import messages
 
 """ D&D 5e Combat Simulator battle grid ============================ """
 
-occupied = []
-
 class Map:
 
+    statics = {}       # Container for static objects such as corpses
     paths = {}
-    coords = {}
     occupied = {}
+
+    @staticmethod
+    def remove(creature):
+        try:
+            Map.occupied.pop(creature.position)
+        except:
+            pass
 
     @staticmethod
     def update(creature):
         """ Update world map with creature positions and mark
         restricted coordinates. Corpses do not restrict movement. """
         if creature.is_dead:
-            symbol = ' † '
+            Map.statics[creature.position] = ' † '
+            Map.remove(creature)
         else:
-            symbol = creature.name
-            Map.occupied[creature.position] = creature.party
-        Map.coords.setdefault(creature.position, []).append(symbol)
+            #Map.occupied[creature.position] = creature.party
+            #symbol = creature.name
+            Map.occupied[creature.position] = creature
+        #Map.coords.setdefault(creature.position, []).append(symbol)
 
     @staticmethod
-    def reset():
-        Map.coords = {}
-        #Map.occupied = {}
+    def reset_paths():
+        Map.paths = {}
+
+    @staticmethod
+    def reset_map():
+        Map.statics = {}
+        Map.occupied = {}
         Map.paths = {}
 
     @staticmethod
@@ -38,7 +49,7 @@ class Map:
         occupied_by = Map.occupied.get(coordinates, None)
         if occupied_by is None:
             return 0
-        elif occupied_by == creature.party:
+        elif occupied_by.party == creature.party:
             return 5
         else:
             return 15
@@ -197,7 +208,7 @@ def __close_distance(creature, path, reach, run=False):
 
 
 def close_distance(creature, path, reach, run=False):
-    """ Store start position """
+    """ Store start position and update map position"""
     sx, sy, sz = creature.position
 
     """ Set speed multiplier if running """
@@ -241,6 +252,66 @@ def close_distance(creature, path, reach, run=False):
     creature.speed['ground'] = max(creature.speed['ground'] - distance, 0)
     creature.position = coordinates
 
+    x, y, z = coordinates
+    msg = "%s %s %i ft. from (%i, %i, %i) to (%i, %i, %i)" \
+          % (creature.name, moves, distance, sx, sy, sz, x, y, z)
+    messages.IO.printmsg(msg, level=3, indent=True, print_turn=True)
+
+    return distance, coordinates
+
+
+def keep_distance(creature, enemy, path, reach, run=False):
+
+    ## TODO: Merge function with close_distance()
+
+    """ Store start position """
+    sx, sy, sz = creature.position
+    A = creature.position
+    #B = enemy.position
+
+    """ Set speed multiplier if running """
+    if run:
+        move_points = creature.speed['ground'] * 2
+        moves = "runs"
+    else:
+        move_points = creature.speed['ground']
+        moves = "moves"
+
+    """ Disallow moving if moving points are depleted """
+    if move_points < 5 or not path:
+        return 0, creature.position
+
+    """ Get enemy positions in the map that are not in the path """
+    enemy_pos = [pos for pos, party in Map.occupied.items()
+                if party != creature.party and pos not in path]
+
+    penalty = 0
+    distance = 0
+    coordinates = creature.position
+    for coordinates in path:
+
+        Map.paths[coordinates] = " ● "
+
+        """ Check if enemies are occupying coordinates next to the
+        current position, add 5 ft penalty for each """
+        if enemy_pos:
+            adjacent = [is_adjacent(coordinates, B) for B in enemy_pos]
+            penalty += sum(adjacent) * 5
+
+        """ Check if creatures are blocking the path. Add 15 ft penalty
+        for enemies and 5 ft for allies """
+        base_cost = get_dist(creature.position, coordinates)
+        penalty += Map.get_penalty(creature, coordinates)
+        distance = base_cost + penalty
+
+        """ Stop if running out of reach or at destination """
+        if reach == get_dist(coordinates, enemy.position):
+            break
+        if move_points == distance:
+            break
+
+    creature.speed['ground'] = max(creature.speed['ground'] - distance, 0)
+    creature.position = coordinates
 
     x, y, z = coordinates
     msg = "%s %s %i ft. from (%i, %i, %i) to (%i, %i, %i)" \
@@ -249,7 +320,7 @@ def close_distance(creature, path, reach, run=False):
 
     return distance, coordinates
 
-def keep_distance(creature, enemy, path, reach):
+def __keep_distance(creature, enemy, path, reach):
 
     """ Store start position """
     sx, sy, sz = creature.position
@@ -270,46 +341,48 @@ def keep_distance(creature, enemy, path, reach):
 
     print('KEEP DISTANCE ERROR')
 
-def print_coords():
+def print_coords(size=15):
 
-    size = 12
-
-    #for k,v in Map.coords.items():
-    #    print(k, v)
+    def format(c):
+        c = str(c)
+        if len(c) == 3:
+            return c
+        if len(c) == 2:
+            return c + " "
+        else:
+            return " " + c + " "
 
     if messages.VERBOSE_LEVEL == 4:
-        X = [i for i in range(-size,0)] + [i for i in range(0,size+1)]
-        Y = [i for i in range(size,0,-1)] + [i for i in range(0,-size+1, -1)]
+        """ Calculate the center point of action """
+        vecs = {'x': 0, 'y': 0, 'z': 0}
+        for i, dim in enumerate(vecs):
+            vecs[dim] = round(sum([p[i] for p in Map.occupied]) / len(Map.occupied))
 
-        def format(c):
-            c = str(c)
-            if len(c) == 3:
-                return c
-            if len(c) == 2:
-                return c + " "
-            else:
-                return " " + c + " "
+        x_axis = [i+vecs['x'] for i in range(-size,0)] +\
+                 [i+vecs['x'] for i in range(0,size+1)]
+        y_axis = [i+vecs['y'] for i in range(size,0,-1)] +\
+                 [i+vecs['y'] for i in range(0,-size+1, -1)]
 
-        print('   ' + "".join([format(x) for x in X]))
-
+        """ Print header """
+        print('   ' + "".join([format(x) for x in x_axis]))
         rows = []
-        for y in Y:
+        for y in y_axis:
             cols = []
-            for x in X:
-                POS = (x, y, 0)
-                symbol = Map.paths.get(POS, " ∙ ")
-                for pos, c in occupied:
-                    px, py, pz = pos
-                    if x == px and y == py:
-                        symbol = c[0:2] + c[-1]
-                cols.append(symbol)
+            for x in x_axis:
+                pos = (x, y, 0)
+                symbol = Map.statics.get(pos, Map.paths.get(pos, " ∙ "))
+                override = Map.occupied.get(pos, None)
+                if override is not None:
+                    symbol = override.name[0:3]
 
+                cols.append(symbol)
             rows.append(cols)
 
         i = 0
         for r in rows:
-            print(format(Y[i]) + ''.join(r))
+            print(format(y_axis[i]) + ''.join(r))
             i += 1
+
 
 #print_coords()
 '''
@@ -317,9 +390,7 @@ A = (0,0,0)
 B = (0,4,0)
 speed = {'ground': 40, 'fly': 50}
 reach = 5
-
 path = get_opposite(A, B, speed)
-
 d, c = move_to_farthest(A, path, speed, reach)
 print(d, c)
 '''

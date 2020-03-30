@@ -1,6 +1,7 @@
 
 import dice
 import messages
+import world
 from mechanics import DnDRuleset as R
 
 class Ability:
@@ -135,5 +136,11 @@ class PackTactics:
 
     @staticmethod
     def use(creature, allies, enemies=[]):
-        if len([c for c in allies.members if not c.is_dead]) > 1:
-            creature.set_advantage('hit', 1)
+        if allies:
+            for a in allies.members:
+                if a.position != creature.position:
+                    if world.is_adjacent(a.position, creature.position):
+                        creature.set_advantage('hit', 1)
+                        break
+
+        creature.set_advantage('hit', 0)

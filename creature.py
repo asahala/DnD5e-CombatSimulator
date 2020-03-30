@@ -9,6 +9,7 @@ import random
 import copy
 import world
 import messages
+import behavior
 from collections import Counter
 from weapons import Weapon
 from abilities import *
@@ -19,7 +20,9 @@ class Basecreature(object):
 
     def __init__(self, name, size, category, cr, ac, hp, speed,
                  scores, melee_attacks, multi_attacks=[], ranged_attacks=[], actions=[],
+                 acts_per_turn = 1,
                  speed_fly = 0,
+                 ai=None,
                  saves=None,
                  passives=[],
                  resistances=[],
@@ -97,6 +100,14 @@ class Basecreature(object):
 
         #TODO movement
         self.distance = 0
+
+        """ Store which weapon is being used """
+        self.active_weapon = None
+
+        if ai is None:
+            pass
+        else:
+            self.ai = ai(self)
 
     def __repr__(self):
         CR = {0.125: "1/8", 0.25: "1/4", 0.5: "1/2"}
@@ -230,7 +241,6 @@ class Basecreature(object):
             if R.roll_save(self, ability, dc):
                 self.set_restrain(False, dc=0, save=None)
                 return False
-
         return True
 
     def end_turn(self):
@@ -253,19 +263,22 @@ class Basecreature(object):
 
         self.hp -= damage
 
-        messages.IO.total_damage.setdefault(dmg_type, 0)
-        messages.IO.total_damage[dmg_type] += damage
-        messages.IO.hp = self.hp
-        messages.IO.target_name = self.name
-        messages.IO.printlog()
         """ Check if creature can drop to 1 HP instead of 0 """
         if self.hp <= 0 and self.passives:
             for passive in self.passives:
                 if passive.type == 'avoid_death':
                     self.hp = passive.use(self, damage, dmg_type, crit_multiplier)
 
+        messages.IO.total_damage.setdefault(dmg_type, 0)
+        messages.IO.total_damage[dmg_type] += damage
+        messages.IO.hp = self.hp
+        messages.IO.target_name = self.name
+        messages.IO.printlog()
+
         if self.is_dead:
             messages.IO.printmsg("-> %s is dead. " % self.name, 2, True, False)
+            world.Map.remove(self)
+            world.Map.statics[self.position] = ' † '
 
     def set_grapple(self, state, dc=0, save='str', source=None):
         if state:
@@ -394,17 +407,37 @@ class Basecreature(object):
                 if passive.type == 'on_start':
                     passive.use(self, allies, enemies)
 
-    def move(self, enemy, weapon):
+    def attack(self):
+        """ Set focus on enemy and attack it """
+
+        self.active_weapon.use(self, self.focused_enemy)
+        self.active_weapon.ammo -= 1
+        '''
+        if self.melee_attacks or self.ranged_attacks:
+            attacks = self.select_weapon(enemies)
+            if isinstance(attacks, Weapon):
+                attacks = [attacks]
+            for attack in attacks:
+                """ Always set new focus in case the enemy dies """
+                self.set_focus(enemies)
+                if self.focused_enemy is not None:
+                    """ Do not attack or move if there are no enemies left """
+                    at_range = self.move(self.focused_enemy, attack)
+                    if at_range:
+                        attack.use(self, self.focused_enemy)
+                        attack.ammo -= 1'''
+
+    def move(self):
         A = self.position
-        B = enemy.position
+        B = self.focused_enemy.position
         distance = world.get_dist(A, B)
+
+        enemy = self.focused_enemy
+        weapon = self.active_weapon
 
         if distance > weapon.reach:
             """ If not at reach, close distance """
             path = world.get_path(A, B)
-            #print(distance, weapon.reach)
-            #print(self.name, A, '::::', enemy.name, B)
-            #print(path)
             if distance > self.speed['ground'] + weapon.reach:
                 """ Run if can't get to range by moving regularly. 
                 Return False as action points spent on moving  """
@@ -422,78 +455,53 @@ class Basecreature(object):
         else:
             return False
 
-    def select_weapon(self, enemies):
-
-        def pick():
-            attacks = []
-            min_distance = 0
-            for weapon in self.melee_attacks:
-                if isinstance(weapon, list):
-                    for subweapon in weapon:
-                        if subweapon.special:
-                            attacks = [weapon]
-                            min_distance = weapon.min_distance
-                else:
-                    if weapon.special:
-                        attacks = [weapon]
-                        min_distance = weapon.min_distance
-            return attacks, min_distance
-
-        """ Priority 1: Use a weapon with special ability """
-        attacks, min_distance = pick()
-
-        """ Override priority: If ranged weapon is available, use it """
-        if self.ranged_attacks:
-            if isinstance(self.ranged_attacks[0], list):
-                opts = self.ranged_attacks
+    def choose_target(self, enemies, choice=None):
+        """ Set focus to some enemy and keep it unless the target dies;
+        lower intelligence results to simpler decisions """
+        if choice is None:
+            if self.scores['int'] <= 4:
+                choice = enemies.get_closest(self.position)
             else:
-                opts = [a for a in self.ranged_attacks if a.ammo > 0]
-            if opts:
-                attacks = opts
-            else:
-                attacks = self.melee_attacks
+                choice = enemies.get_weakest()
 
-        """ If not chosen yet, pick one melee attack """
-        if not attacks:
-            attacks = self.melee_attacks
+        if self.focused_enemy is None:
+            self.focused_enemy = choice
+        elif self.focused_enemy.is_dead:
+            self.focused_enemy = choice
 
-        """ Override choice if next to enemy """
+    def choose_weapon(self, enemies, weapons=None):
+
+        # TODO optimize for big encounters, just check surrounding
+        # space and not every enemy
+        """ Check if enemies are too close, pick melee weapon if so """
         for e in enemies.members:
             if world.is_adjacent(self.position, e.position):
-                if isinstance(attacks[0], list):
-                    pass
-                else:
-                    attacks = [x for x in self.melee_attacks
-                               if x.min_distance <= 5]
+                weapons = self.melee_attacks.get('special',
+                            self.melee_attacks.get('basic', None))
                 break
 
-        return random.choice(attacks)
+        """ General weapon selector; prioritize ranged -> melee and
+        special -> basic """
+        if self.ranged_attacks and weapons is not None:
+            weapons = self.ranged_attacks.get('special',
+                        self.ranged_attacks.get('basic', None))
+            weapons = [attack for attack in weapons if attack.ammo > 0]
 
-    def perform_action(self, allies, enemies):
-        """ General method for performing actions """
+        if weapons is None and self.melee_attacks:
+            weapons = self.melee_attacks.get('special',
+                        self.melee_attacks.get('basic', None))
+
+        self.active_weapon = random.choice(weapons)
+
+    def act(self, allies, enemies):
+        """ Routine for actions that utilizes given behavior class """
+        world.Map.remove(self)
         if not self.is_dead:
-            if not self.is_incapacitated:
-                may_act = self.begin_turn()
+            if self.begin_turn():
                 self.check_passives(allies, enemies)
-                if may_act:
-                    self.attack(enemies)
-            self.end_turn()
-
-    def attack(self, enemies):
-        """ Set focus on enemy and attack it """
-        if self.melee_attacks or self.ranged_attacks:
-            attacks = self.select_weapon(enemies)
-            if isinstance(attacks, Weapon):
-                attacks = [attacks]
-            for attack in attacks:
-                """ Always set new focus in case the enemy dies """
-                self.set_focus(enemies)
-                if self.focused_enemy is not None:
-                    """ Do not attack or move if there are no enemies left """
-                    at_range = self.move(self.focused_enemy, attack)
-                    if at_range:
-                        attack.use(self, self.focused_enemy)
-                        attack.ammo -= 1
+                self.ai.do_stuff(allies, enemies)
+        self.end_turn()
+        world.Map.update(self)
 
 
 class Party:
@@ -537,6 +545,7 @@ class Party:
         return [c for c in party if not c.is_dead]
 
     def get_weakest(self):
+        """ Pick weakest creature (HP-wise) """
         weakest = sorted(self.remove_dead(self.members),
                          key=operator.attrgetter('hp'),
                          reverse=False)
@@ -544,6 +553,15 @@ class Party:
             return None
         else:
             return weakest[0]
+
+    def get_closest(self, B):
+        """ Pick closest enemy to position ´B' """
+        closest = min([(world.get_dist(x.position, B), x) for x in self.remove_dead(self.members)],
+                         key=operator.itemgetter(0))[-1]
+        if not closest:
+            return None
+        else:
+            return closest
 
     def get_teams(self, other, creature):
         """ Return two Party objects comprising allies and enemies
@@ -579,7 +597,6 @@ class Party:
                 k = i
             creature.position = (x+k, y+j, z)
             world.Map.update(creature)
-            world.occupied.append([creature.position, creature.name])
             i += 1
 
 spider_web = Restrain(name="Web", dc=11, save='str', to_hit=5, recharge=5)
@@ -775,10 +792,12 @@ crocodile = Basecreature(name='crocodile', cr=0.5, ac=12, hp=19, speed=20,
 
 dire_wolf = Basecreature(name='dire wolf', cr=1, ac=14, hp=37, speed=50,
                          size='large',
+                         ai=behavior.SocialAnimal,
                          category="beast",
                          scores={'str': 17, 'dex': 15, 'con': 15,
                                  'int': 3, 'wis': 12, 'cha': 7},
-                         melee_attacks=[dire_wolf_bite])
+                         melee_attacks={'special': [dire_wolf_bite]},
+                         passives=[pack_tactics])
 
 wolf = Basecreature(name='wolf', cr=0.25, ac=13, hp=11, speed=40,
                     size='medium',
@@ -807,30 +826,42 @@ mammoth = Basecreature(name='mammoth', cr=6, ac=13, hp=126, speed=40,
 skeleton = Basecreature(name='skeleton', cr=0.25, ac=13, hp=13, speed=30,
                         size='medium',
                         category="undead",
+                        ai=behavior.Standard,
                         scores={'str': 10, 'dex': 14, 'con': 15,
                                 'int': 6, 'wis': 8, 'cha': 5},
                         immunities=['poison', 'paralysis'],
                         vulnerabilities=['bludgeoning'],
-                        melee_attacks=[
-                            Weapon(name='shortsword', damage=["1d6+2"],
-                                   damage_type=["slashing"], reach=5, to_hit=4)],
-                        ranged_attacks=[
-                            Weapon(name='shortbow', damage=["1d6+2"],
-                            damage_type=["piercing"], ammo=20, ranged=True, reach=80, to_hit=4)
-                        ])
+                        melee_attacks={'basic':
+                                           [Weapon(name='shortsword',
+                                                   damage=["1d6+2"],
+                                                   damage_type=["slashing"],
+                                                   reach=5,
+                                                   to_hit=4)]},
+                        ranged_attacks={'basic':
+                                        [Weapon(name='shortbow',
+                                                 damage=["1d6+2"],
+                                                    damage_type=["piercing"],
+                                                    ranged=True,
+                                                    ammo=20,
+                                                    reach=80,
+                                                    to_hit=4)]}
+                        )
 
 zombie = Basecreature(name='zombie', cr=0.25, ac=8, hp=22, speed=20,
+                      ai=behavior.Standard,
                       size='medium',
                       category="undead",
                       scores={'str': 13, 'dex': 6, 'con': 16,
                               'int': 3, 'wis': 6, 'cha': 5},
                       saves={'wis': 0},
                       immunities=['poison', 'paralysis'],
-                      melee_attacks=[Weapon(name='slam',
-                                      damage=["1d6+1"],
-                                      damage_type=["bludgeoning"],
-                                      reach=5,
-                                      to_hit=3)],
+                      melee_attacks={'basic':
+                                         [Weapon(name='slam',
+                                                 damage=["1d6+1"],
+                                                 damage_type=["bludgeoning"],
+                                                 reach=5,
+                                                 to_hit=3)]
+                                     },
                       passives=[AvoidDeath(name="Undead Fortitude",
                                            save='con',
                                            minimum_hp=1)])
@@ -911,11 +942,13 @@ class Encounter:
         messages.IO.printmsg(self.party2.__repr__(), 1)
 
         world.print_coords()
-        #world.occupied = []
-        world.Map.reset()
 
         round = 1
         while self.party1.is_alive and self.party2.is_alive:
+            """ Reset path maps """
+            world.Map.reset_paths()
+
+            """ Begin round """
             turn = 1
             messages.IO.printmsg("\nROUND %i %s\n" % (round, DIVIDER), level=1, indent=False)
             for creature in self.order_of_action:
@@ -925,22 +958,23 @@ class Encounter:
 
                 """ Allow only living creatures to act """
                 if self.party1.is_alive and self.party2.is_alive:
-                    creature.perform_action(allies, enemies)
+                    #creature.perform_action(allies, enemies)
+                    creature.act(allies, enemies)
 
                 """ Count turns only for living creatures """
                 if not creature.is_dead:
                     turn += 1
-                    world.occupied.append([creature.position, creature.name])
-                else:
-                    world.occupied.append([creature.position, ' † '])
-
-                world.Map.update(creature)
 
             world.print_coords()
-            #world.occupied = {}
-            world.Map.reset()
-
             round += 1
+
+
+        # TODO better: draw end state
+        for creature in self.order_of_action:
+            world.Map.update(creature)
+
+        world.print_coords()
+        world.Map.reset_map()
 
         if self.party1.is_alive:
             messages.IO.printmsg("\n%s wins!" % self.party1.name, level=1)
@@ -949,19 +983,6 @@ class Encounter:
         else:
             messages.IO.printmsg("\n%s wins!" % self.party2.name, level=1)
             return self.party2.name
-
-        # TODO better: draw end state
-        for creature in self.order_of_action:
-            if not creature.is_dead:
-                world.occupied.append([creature.position, creature.name])
-                #world.update_map(creature)
-            else:
-                world.occupied.append([creature.position, ' † '])
-            world.Map.update(creature)
-
-        world.print_coords()
-        world.occupied = []
-        world.Map.reset
 
 matches = 1
 i = 0
@@ -973,14 +994,17 @@ dmg_tablesB = {}
 while i < matches:
     print("Match %i" % i)
     team1 = Party(name='Team A')
-    team1.add(copy.deepcopy(zombie))
+    team1.add(copy.deepcopy(dire_wolf))
+    team1.add(copy.deepcopy(dire_wolf))
     team1.set_formation((0,3,0))
 
 
     team2 = Party(name='Team B')
-    team2.add(copy.deepcopy(black_bear))
-    team2.set_formation((0,-3,0))
+    team2.add(copy.deepcopy(zombie))
+    team2.add(copy.deepcopy(zombie))
+    team2.add(copy.deepcopy(zombie))
 
+    team2.set_formation((0,-3,0))
 
     x = Encounter(team1, team2)
 
