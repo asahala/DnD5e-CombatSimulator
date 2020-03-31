@@ -11,42 +11,42 @@ class Map:
     paths = {}
     occupied = {}
 
-    @staticmethod
-    def remove(creature):
+    @classmethod
+    def remove(cls, creature):
         try:
-            Map.occupied.pop(creature.position)
+            cls.occupied.pop(creature.position)
         except:
             pass
 
-    @staticmethod
-    def update(creature):
+    @classmethod
+    def update(cls, creature):
         """ Update world map with creature positions and mark
         restricted coordinates. Corpses do not restrict movement. """
         if creature.is_dead:
-            Map.statics[creature.position] = ' † '
-            Map.remove(creature)
+            cls.statics[creature.position] = ' † '
+            cls.remove(creature)
         else:
             #Map.occupied[creature.position] = creature.party
             #symbol = creature.name
-            Map.occupied[creature.position] = creature
+            cls.occupied[creature.position] = creature
         #Map.coords.setdefault(creature.position, []).append(symbol)
 
-    @staticmethod
-    def reset_paths():
-        Map.paths = {}
+    @classmethod
+    def reset_paths(cls):
+        cls.paths = {}
 
-    @staticmethod
-    def reset_map():
-        Map.statics = {}
-        Map.occupied = {}
-        Map.paths = {}
+    @classmethod
+    def reset_map(cls):
+        cls.statics = {}
+        cls.occupied = {}
+        cls.paths = {}
 
-    @staticmethod
-    def get_penalty(creature, coordinates):
+    @classmethod
+    def get_penalty(cls, creature, coordinates):
         """ Check if coordinates on path are blocked. Double movement
         if ally, quadruple if enemy (assume that going around the
          occupied enemy position consumes 15 ft of movement) """
-        occupied_by = Map.occupied.get(coordinates, None)
+        occupied_by = cls.occupied.get(coordinates, None)
         if occupied_by is None:
             return 0
         elif occupied_by.party == creature.party:
@@ -147,6 +147,10 @@ def is_adjacent(A, B):
 
     return all([diff_x, diff_y, diff_z])
 
+def any_is_adjacent(A, B: list) -> bool:
+    """ Return True if any position listed in B is adjacent to A """
+    return any(is_adjacent(A, b) for b in B)
+
 def get_opposite(A, B, creature):
     """ Return path to the most distant coordinate to B
     creature in A can reach with given speed. Ignore
@@ -171,41 +175,6 @@ def get_opposite(A, B, creature):
         iy = jy / abs(jy)
 
     return get_path(A, (x0 + round(f*ix), y0 + round(f*iy), 0))
-
-
-def __close_distance(creature, path, reach, run=False):
-    """ Store start position """
-    sx, sy, sz = creature.position
-
-    if creature.speed['ground'] < 5:
-        return 0, creature.position
-
-    """ Set speed multiplier if running """
-    if run:
-        multi = 2
-        moves = "runs"
-    else:
-        multi = 1
-        moves = "moves"
-
-    """ Iterate path ignoring the coordinates where target is located;
-    begin iteration from the most distant point and stop it when
-    creature speed is greater than the distance (i.e. can reach the 
-    position) """
-    for coordinates in reversed(path[:-1]):
-        x, y, z = coordinates
-        distance = get_dist(creature.position, coordinates)
-        if creature.speed['ground'] * multi >= distance:
-            creature.position = coordinates
-            creature.speed['ground'] = max(creature.speed['ground'] - distance, 0)
-            creature.distance = distance
-            msg = "%s %s %i ft. from (%i, %i, %i) to (%i, %i, %i)" \
-                  % (creature.name, moves, distance, sx, sy, sz, x,y,z)
-            messages.IO.printmsg(msg, level=3, indent=True, print_turn=True)
-            return distance, coordinates
-
-    print('CLOSE DISTANCE ERROR')
-
 
 def close_distance(creature, path, reach, run=False):
     """ Store start position and update map position"""
@@ -282,8 +251,8 @@ def keep_distance(creature, enemy, path, reach, run=False):
         return 0, creature.position
 
     """ Get enemy positions in the map that are not in the path """
-    enemy_pos = [pos for pos, party in Map.occupied.items()
-                if party != creature.party and pos not in path]
+    enemy_pos = (pos for pos, party in Map.occupied.items()
+                if party != creature.party and pos not in path)
 
     penalty = 0
     distance = 0
@@ -305,9 +274,10 @@ def keep_distance(creature, enemy, path, reach, run=False):
         distance = base_cost + penalty
 
         """ Stop if running out of reach or at destination """
-        if reach == get_dist(coordinates, enemy.position):
+        if reach == get_dist(coordinates, enemy.position) \
+                and move_points >= distance:
             break
-        if move_points == distance:
+        if move_points <= distance:
             break
 
     creature.speed['ground'] = max(creature.speed['ground'] - distance, 0)
@@ -320,28 +290,12 @@ def keep_distance(creature, enemy, path, reach, run=False):
 
     return distance, coordinates
 
-def __keep_distance(creature, enemy, path, reach):
 
-    """ Store start position """
-    sx, sy, sz = creature.position
-    A = creature.position
-    B = enemy.position
-
-    for coordinates in reversed(path):
-        x, y, z = coordinates
-        d = get_dist(A, coordinates)
-        de = get_dist(B, coordinates)
-        if creature.speed['ground'] >= d and reach >= de:
-            creature.position = coordinates
-            creature.speed['ground'] -= d
-            msg = "%s moves %i ft. from (%i, %i, %i) to (%i, %i, %i)" \
-                      % (creature.name, d, sx, sy, sz, x,y,z)
-            messages.IO.printmsg(msg, level=2, indent=True, print_turn=True)
-            return d, coordinates
-
-    print('KEEP DISTANCE ERROR')
+last_vecs = {}
 
 def print_coords(size=15):
+
+    global last_vecs
 
     def format(c):
         c = str(c)
@@ -353,15 +307,20 @@ def print_coords(size=15):
             return " " + c + " "
 
     if messages.VERBOSE_LEVEL == 4:
-        """ Calculate the center point of action """
+        """ Calculate the center point of action. If all creatures die
+        freeze map to the last position """
         vecs = {'x': 0, 'y': 0, 'z': 0}
-        for i, dim in enumerate(vecs):
-            vecs[dim] = round(sum([p[i] for p in Map.occupied]) / len(Map.occupied))
+        if len(Map.occupied) > 0:
+            for i, dim in enumerate(vecs):
+                vecs[dim] = round(sum(p[i] for p in Map.occupied) / len(Map.occupied))
+                last_vecs = vecs
+        else:
+            vecs = last_vecs
 
-        x_axis = [i+vecs['x'] for i in range(-size,0)] +\
-                 [i+vecs['x'] for i in range(0,size+1)]
-        y_axis = [i+vecs['y'] for i in range(size,0,-1)] +\
-                 [i+vecs['y'] for i in range(0,-size+1, -1)]
+        x_axis = [i+vecs['x'] for i in range(-size, 0)] +\
+                 [i+vecs['x'] for i in range(0, size+1)]
+        y_axis = [i+vecs['y'] for i in range(size, 0, -1)] +\
+                 [i+vecs['y'] for i in range(0, -size+1, -1)]
 
         """ Print header """
         print('   ' + "".join([format(x) for x in x_axis]))
@@ -373,7 +332,10 @@ def print_coords(size=15):
                 symbol = Map.statics.get(pos, Map.paths.get(pos, " ∙ "))
                 override = Map.occupied.get(pos, None)
                 if override is not None:
-                    symbol = override.name[0:3]
+                    if override.party == "Team A":
+                        symbol = override.name[0:3]
+                    else:
+                        symbol = override.name[0:3].lower()
 
                 cols.append(symbol)
             rows.append(cols)
@@ -395,8 +357,6 @@ d, c = move_to_farthest(A, path, speed, reach)
 print(d, c)
 '''
 
-#A = (19, 8, 0)
-#B = (-20, -7, -0)
 #print(is_adjacent(A,B))
 
 #A = (0,0,0)

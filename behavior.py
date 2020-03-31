@@ -24,8 +24,8 @@ class SocialAnimal:
 
     def do_stuff(self, allies, enemies):
         choice = None
-        for a in allies.members:
-            if a.focused_enemy is not None:
+        for a in allies.get_alive():
+            if a.focused_enemy is not None and not a.focused_enemy.is_dead:
                 choice = a.focused_enemy
         self.me.choose_target(enemies, choice)
         self.me.choose_weapon(enemies)

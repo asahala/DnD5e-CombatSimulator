@@ -107,10 +107,10 @@ class AvoidDeath:
 
     :type name                 str
     :type penalty              int
-    :type save                 int
+    :type save                 str
     :type minimum_hp           int """
 
-    def __init__(self, name, penalty=0, save=None, minimum_hp=0):
+    def __init__(self, name, save, minimum_hp, penalty=0):
         self.name = name
         self.penalty = penalty
         self.type = 'avoid_death'
@@ -130,17 +130,16 @@ class AvoidDeath:
 class PackTactics:
 
     """ Pack tactics gives and advantage to hit rolls if
-    allies are nearby """
+    adjacent squares contain allies  """
 
     type = 'on_start'
 
     @staticmethod
     def use(creature, allies, enemies=[]):
-        if allies:
-            for a in allies.members:
-                if a.position != creature.position:
-                    if world.is_adjacent(a.position, creature.position):
-                        creature.set_advantage('hit', 1)
-                        break
 
-        creature.set_advantage('hit', 0)
+        ally_positions = (a.position for a in allies.get_alive()
+                    if a.position != creature.position)
+        if world.any_is_adjacent(creature.position, ally_positions):
+            creature.set_advantage('hit', 1)
+        else:
+            creature.set_advantage('hit', 0)

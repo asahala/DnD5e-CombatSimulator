@@ -39,8 +39,8 @@ class Weapon(object):
         dmg = []
         for i in range(0, len(self.damage)):
             dmg.append(self.damage_print[i] \
-                       + " (%s)" % self.damage_type[i] \
-                       + " %i ft. reach" % self.reach)
+                       + " | (%s)" % self.damage_type[i] \
+                       + " | %i ft. reach" % self.reach)
         return "{name}: {dmg}".format(name=self.name.capitalize(),
                                       dmg=", ".join(dmg))
 
