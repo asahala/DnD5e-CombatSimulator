@@ -8,10 +8,11 @@ class Standard:
 
     def do_stuff(self, allies, enemies):
         self.me.choose_target(enemies)
-        self.me.choose_weapon(enemies)
-        at_range = self.me.move()
-        if at_range:
-            self.me.attack()
+        if self.me.focused_enemy is not None:
+            self.me.choose_weapon(enemies)
+            at_range = self.me.move()
+            if at_range:
+                self.me.attack()
 
 
 class SocialAnimal:
@@ -28,7 +29,8 @@ class SocialAnimal:
             if a.focused_enemy is not None and not a.focused_enemy.is_dead:
                 choice = a.focused_enemy
         self.me.choose_target(enemies, choice)
-        self.me.choose_weapon(enemies)
-        at_range = self.me.move()
-        if at_range:
-            self.me.attack()
+        if self.me.focused_enemy is not None:
+            self.me.choose_weapon(enemies)
+            at_range = self.me.move()
+            if at_range:
+                self.me.attack()

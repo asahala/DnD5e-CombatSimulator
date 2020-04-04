@@ -5,6 +5,8 @@ import messages
 
 """ D&D 5e Combat Simulator battle grid ============================ """
 
+symbols = {'Team A': ' ○ ', 'Team B': ' ● '}
+
 class Map:
 
     statics = {}       # Container for static objects such as corpses
@@ -52,7 +54,7 @@ class Map:
         elif occupied_by.party == creature.party:
             return 5
         else:
-            return 15
+            return 10
 
 def get_dist(A, B):
     """ Return distance between coordinates A and B in ft.
@@ -151,12 +153,12 @@ def any_is_adjacent(A, B: list) -> bool:
     """ Return True if any position listed in B is adjacent to A """
     return any(is_adjacent(A, b) for b in B)
 
-def get_opposite(A, B, creature):
+def get_opposite(A, B, speed):
     """ Return path to the most distant coordinate to B
-    creature in A can reach with given speed. Ignore
+    creature A can reach with given speed. Ignore
      z-axis as it is irrelevant """
 
-    f = math.floor(2 * creature.speed['ground'] / 5)
+    f = math.floor(speed / 5)
 
     if A == B:
         return get_path(A, A)
@@ -175,6 +177,29 @@ def get_opposite(A, B, creature):
         iy = jy / abs(jy)
 
     return get_path(A, (x0 + round(f*ix), y0 + round(f*iy), 0))
+
+def force_move(source, target, path, reason):
+    """ Force move creature, e.g. knockback """
+    sx, sy, sz = target.position
+    Map.remove(target)
+
+    """ Check if path is free; if obstructed take three damage
+     per tile """
+    damage = 0
+    for pos in reversed(path):
+        if pos not in Map.occupied:
+            end_position = pos
+            break
+        else:
+            damage += 3
+
+    if damage:
+        target.take_damage(source, damage, 'bludgeoning', 1)
+    target.position = end_position
+    Map.update(target)
+    x, y, z = target.position
+    msg = "-> %s forced from (%i, %i, %i) to (%i, %i, %i) by %s" % (target.name, sx, sy, sz, x, y, z, reason)
+    messages.IO.printmsg(msg, level=3, indent=True, print_turn=False)
 
 def close_distance(creature, path, reach, run=False):
     """ Store start position and update map position"""
@@ -201,7 +226,7 @@ def close_distance(creature, path, reach, run=False):
     coordinates = creature.position
     for coordinates in path:
 
-        Map.paths[coordinates] = " ● "
+        Map.paths[coordinates] = symbols[creature.party]
 
         """ Check if enemies are occupying coordinates next to the
         current position, add 5 ft penalty for each """
@@ -218,13 +243,16 @@ def close_distance(creature, path, reach, run=False):
         if move_points == distance:
             break
 
-    creature.speed['ground'] = max(creature.speed['ground'] - distance, 0)
+
+    creature.speed['ground'] = creature.speed['ground'] - distance
     creature.position = coordinates
+    creature.distance = base_cost
 
     x, y, z = coordinates
     msg = "%s %s %i ft. from (%i, %i, %i) to (%i, %i, %i)" \
-          % (creature.name, moves, distance, sx, sy, sz, x, y, z)
+          % (creature.name, moves, base_cost, sx, sy, sz, x, y, z)
     messages.IO.printmsg(msg, level=3, indent=True, print_turn=True)
+
 
     return distance, coordinates
 
@@ -255,23 +283,22 @@ def keep_distance(creature, enemy, path, reach, run=False):
                 if party != creature.party and pos not in path)
 
     penalty = 0
-    distance = 0
     coordinates = creature.position
     for coordinates in path:
 
-        Map.paths[coordinates] = " ● "
+        Map.paths[coordinates] = symbols[creature.party]
 
         """ Check if enemies are occupying coordinates next to the
         current position, add 5 ft penalty for each """
-        if enemy_pos:
-            adjacent = [is_adjacent(coordinates, B) for B in enemy_pos]
-            penalty += sum(adjacent) * 5
+        #if enemy_pos:
+        #    adjacent = [is_adjacent(coordinates, B) for B in enemy_pos]
+        #   penalty += sum(adjacent) * 5
 
         """ Check if creatures are blocking the path. Add 15 ft penalty
         for enemies and 5 ft for allies """
-        base_cost = get_dist(creature.position, coordinates)
-        penalty += Map.get_penalty(creature, coordinates)
-        distance = base_cost + penalty
+        distance = get_dist(creature.position, coordinates)
+        #penalty += Map.get_penalty(creature, coordinates)
+        #distance = base_cost + penalty
 
         """ Stop if running out of reach or at destination """
         if reach == get_dist(coordinates, enemy.position) \
@@ -280,7 +307,7 @@ def keep_distance(creature, enemy, path, reach, run=False):
         if move_points <= distance:
             break
 
-    creature.speed['ground'] = max(creature.speed['ground'] - distance, 0)
+    creature.speed['ground'] = creature.speed['ground'] - distance
     creature.position = coordinates
 
     x, y, z = coordinates
@@ -333,9 +360,9 @@ def print_coords(size=15):
                 override = Map.occupied.get(pos, None)
                 if override is not None:
                     if override.party == "Team A":
-                        symbol = override.name[0:3]
+                        symbol = override.name[0:2] + override.name[-1]
                     else:
-                        symbol = override.name[0:3].lower()
+                        symbol = override.name[0:2].lower() + override.name[-1].lower()
 
                 cols.append(symbol)
             rows.append(cols)
