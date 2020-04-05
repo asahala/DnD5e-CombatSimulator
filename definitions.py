@@ -110,6 +110,25 @@ ghoul_claw = Weapon(name='claws',
                     to_hit=4,
                     special=[Paralysis(name='claws', dc=10, save='con')])
 
+giant_crocodile_bite = MultiWeapon(name='bite',
+                                    damage=["3d10+5"],
+                                    damage_type=[piercing],
+                                    reach=5,
+                                    to_hit=8,
+                                    uses_per_turn=1,
+                                    special=[Grapple(name='bite', dc=6, save='str')])
+
+giant_crocodile_tail = MultiWeapon(name='tail',
+                                    damage=["2d8+5"],
+                                    damage_type=[bludgeoning],
+                                    reach=10,
+                                    to_hit=8,
+                                    uses_per_turn=1,
+                                    special=[Knockdown(name="tail",
+                                         dc=20,
+                                         save='str')])
+
+
 giant_spider_bite = Weapon(name='bite', damage=["1d8+3"],
                            damage_type=[piercing],
                            reach=5,
@@ -307,6 +326,17 @@ dire_wolf = BaseCreature(name='dire wolf', cr=1, ac=14, hp=37, speed=50,
                          melee_attacks={'special': [dire_wolf_bite]},
                          passives=[PackTactics])
 
+giant_crocodile = BaseCreature(name='giant crocodile', cr=5, ac=14, hp=85, speed=30,
+                         size=huge,
+                         category=beast,
+                         ai=behavior.Standard,
+                         attacks=2,
+                         scores={'str': 21, 'dex': 9, 'con': 17,
+                                 'int': 2, 'wis': 10, 'cha': 7},
+                         melee_attacks={'basic': [giant_crocodile_bite,
+                                                  giant_crocodile_tail] })
+
+
 giant_spider = BaseCreature(name='giant spider', cr=1, ac=14, hp=26, speed=30,
                             size=large,
                             category=beast,
@@ -336,7 +366,7 @@ ghoul = BaseCreature(name='ghoul', cr=1, ac=12, hp=22, speed=30,
                      ai=behavior.Standard,
                      scores={'str': 13, 'dex': 15, 'con': 10,
                              'int': 7, 'wis': 10, 'cha': 6},
-                     immunities=[poison, paralysis, charm],
+                     immunities=[poison, paralysis, charm, fear],
                      melee_attacks={'basic': [ghoul_bite],
                                     'special': [ghoul_claw]})
 
@@ -409,15 +439,15 @@ orc_war_chieftain = BaseCreature(name='orc war chieftain', cr=4, ac=16, hp=93, s
                                  scores={'str': 18, 'dex': 12, 'con': 18,
                                          'int': 11, 'wis': 11, 'cha': 16},
                                  melee_attacks={'basic': [
-                                     MultiWeapon(name='greataxe', damage=["2d10+4"],
+                                     Weapon(name='greataxe', damage=["2d10+4"],
                                                  damage_type=[slashing], reach=5,
-                                                 to_hit=6, uses_per_turn=2)]},
+                                                 to_hit=6)]},
                                  ranged_attacks={'basic': [
-                                     MultiWeapon(name='javelin', damage=["2d7+4"],
+                                     Weapon(name='javelin', damage=["2d7+4"],
                                                  damage_type=[piercing], reach=40,
                                                  ranged=True,
                                                  ammo=5,
-                                                 to_hit=6, uses_per_turn=2)]})
+                                                 to_hit=6)]})
 
 orog = BaseCreature(name='orog', cr=2, ac=18, hp=42, speed=30,
                     size=medium,
@@ -427,15 +457,15 @@ orog = BaseCreature(name='orog', cr=2, ac=18, hp=42, speed=30,
                     scores={'str': 18, 'dex': 12, 'con': 18,
                             'int': 12, 'wis': 11, 'cha': 12},
                     melee_attacks={'basic': [
-                        MultiWeapon(name='greataxe', damage=["1d12+2"],
+                        Weapon(name='greataxe', damage=["1d12+2"],
                                     damage_type=[slashing], reach=5,
-                                    to_hit=6, uses_per_turn=2)]},
+                                    to_hit=6)]},
                     ranged_attacks={'basic': [
-                        MultiWeapon(name='javelin', damage=["1d6+3"],
+                        Weapon(name='javelin', damage=["1d6+3"],
                                     damage_type=[piercing], reach=30,
                                     ranged=True,
                                     ammo=5,
-                                    to_hit=5, uses_per_turn=2)]})
+                                    to_hit=5)]})
 
 owlbear = BaseCreature(name='owlbear', cr=3, ac=13, hp=59, speed=40,
                        size=medium,
@@ -452,6 +482,28 @@ owlbear = BaseCreature(name='owlbear', cr=3, ac=13, hp=59, speed=40,
                                        damage_type=[slashing], reach=5,
                                        to_hit=7, uses_per_turn=1)
                        ]})
+
+polar_bear = BaseCreature(name='brown bear', cr=2, ac=12, hp=42, speed=40,
+                          size=large,
+                          category=beast,
+                          attacks=2,
+                          ai=behavior.Standard,
+                          scores={'str': 20, 'dex': 10, 'con': 16,
+                                  'int': 2, 'wis': 13, 'cha': 7},
+                          melee_attacks={'basic':
+                                             [MultiWeapon(name='bite',
+                                                          damage=["1d8+5"],
+                                                          damage_type=[piercing],
+                                                          reach=5,
+                                                          to_hit=7,
+                                                          uses_per_turn=1),
+                                              MultiWeapon(name='claws',
+                                                          damage=["2d6+6"],
+                                                          damage_type=[slashing],
+                                                          reach=5,
+                                                          to_hit=7,
+                                                          uses_per_turn=1)]})
+
 
 purple_worm = BaseCreature(name='purple worm', cr=15, ac=18, hp=247, speed=50,
                            size=gargantuan,
@@ -491,7 +543,7 @@ skeleton = BaseCreature(name='skeleton', cr=0.25, ac=13, hp=13, speed=30,
                         ai=behavior.Standard,
                         scores={'str': 10, 'dex': 14, 'con': 15,
                                 'int': 6, 'wis': 8, 'cha': 5},
-                        immunities=[poison, paralysis],
+                        immunities=[poison, paralysis, fear],
                         vulnerabilities=[bludgeoning],
                         melee_attacks={'basic':
                                            [Weapon(name='shortsword',
@@ -589,7 +641,7 @@ wight = BaseCreature(name='wight', cr=3, ac=14, hp=45, speed=30,
                      attacks=2,
                      scores={'str': 15, 'dex': 14, 'con': 16,
                              'int': 10, 'wis': 13, 'cha': 15},
-                     immunities=[poison, paralysis],
+                     immunities=[poison, paralysis, fear, charm],
                      resistances=[necrotic, bludgeoning, piercing, slashing],
                      melee_attacks={'basic':
                                         [wight_longsword,
@@ -612,7 +664,7 @@ wraith = BaseCreature(name='wraith', cr=5, ac=13, hp=67, speed=60,
                       scores={'str': 6, 'dex': 16, 'con': 16,
                               'int': 12, 'wis': 14, 'cha': 15},
                       immunities=[poison, necrotic, prone, paralysis, grapple,
-                                  restrain],
+                                  restrain, fear],
                       resistances=[acid, cold, fire, lightning, thunder,
                                    bludgeoning, piercing, slashing],
                       melee_attacks={'basic':
@@ -645,7 +697,7 @@ zombie = BaseCreature(name='zombie', cr=0.25, ac=8, hp=22, speed=20,
                       scores={'str': 13, 'dex': 6, 'con': 16,
                               'int': 3, 'wis': 6, 'cha': 5},
                       saves={'wis': 0},
-                      immunities=[poison, paralysis],
+                      immunities=[poison, paralysis, fear],
                       melee_attacks={'basic':
                                          [Weapon(name='slam',
                                                  damage=["1d6+1"],

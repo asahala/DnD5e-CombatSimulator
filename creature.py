@@ -210,7 +210,7 @@ class BaseCreature(object):
 
     @property
     def is_poisoned(self):
-        return self.poisoned
+        return self.poisoned["state"]
 
     @property
     def is_paralyzed(self):
@@ -235,13 +235,6 @@ class BaseCreature(object):
         return any([self.is_proned,
                     self.is_restrained,
                     self.is_paralyzed])
-
-    def ___has_advantage_against(self, other):
-        """ Return True if enemy is given advantage on hit rolls against
-        the creature """
-        return any([other.is_proned,
-                    other.is_restrained,
-                    other.is_poisoned])
 
     # ==================================================================
     # Creature condition setters
@@ -388,10 +381,11 @@ class BaseCreature(object):
         self.speed = self.max_speed.copy()   # reset movement speed
         self.first_attack = True             # reset first attack flag
 
+        if self.poisoned['duration'] == 0:
+            self.set_poison(state=False, dc=0, save='con', duration=-1)
+
         if self.is_poisoned:
             self.poisoned['duration'] -= 1
-        if self.is_poisoned['duration'] == 0:
-            self.set_poison(state=False, dc=0, save='con', duration=-1)
 
         """ If swallowed creatures, do damage and check conditions """
         if self.stomach is not None:
@@ -472,51 +466,10 @@ class BaseCreature(object):
                                  % (self.name, amount, spellname), 2, True, True)
 
     def take_max_hp_damage(self, source, amount, spellname):
+        amount = sum(amount.values())
         self.max_hp -= amount
         messages.IO.printmsg("-> %s loses %i max hitpoints from %s." \
                              % (self.name, amount, spellname), 2, True, False)
-
-    def take_damage_(self, source, damage, dmg_type, crit_multiplier):
-
-        """ Check if creature has vulnerability, resistance or immunity
-            to the given damage type """
-        damage = self.check_resistances(dmg_type, damage)
-        damage = self.check_vulnerabilities(dmg_type, damage)
-
-        """ Store damage statistics """
-        source.damage_dealt += damage
-
-        self.hp -= damage
-
-        """ Check if creature can drop to 1 HP instead of 0 """
-        if self.hp <= 0 and self.passives:
-            for passive in self.passives:
-                if passive.type == 'avoid_death':
-                    self.hp = passive.use(self, damage, dmg_type, crit_multiplier)
-
-        #messages.IO.total_damage.setdefault(dmg_type, 0)
-        #messages.IO.total_damage[dmg_type] += damage
-        #messages.IO.hp = self.hp
-        #messages.IO.target_name = self.name
-        #messages.IO.printlog()
-
-        messages.IO.printmsg(source.name + ' does ' + str(damage) + " " + dmg_type + " to " + self.name, 2, True, True)
-
-        if self.is_dead:
-            self.deaths += 1
-            if source != self:
-                source.kills += 1
-            else:
-                self.suicides += 1
-            messages.IO.printmsg("-> %s is dead. " % self.name, 2, True, False)
-            world.Map.remove(self)
-            world.Map.statics[self.position] = ' † '
-
-        if self.is_swallowed:
-            self.swallowed['by'].stomach.damage_count += damage
-
-        """ Return damage in case it's needed for special on-hit effects """
-        return damage
 
     def take_damage(self, source, damage_types, crit_multiplier):
 
@@ -585,17 +538,6 @@ class BaseCreature(object):
     def take_ability_score_damage(self, ability_score, damage):
         self.scores[ability_score] -= damage
         ## TODO: Adjust AC, damage and hit
-
-    def set_focus____444_(self, enemies):
-        """ Set focus to some enemy and keep it unless the target dies """
-
-
-        if self.focused_enemy is None:
-            self.focused_enemy = enemies.get_weakest()
-        elif self.focused_enemy.is_dead:
-            self.focused_enemy = enemies.get_weakest()
-
-
 
     def check_passives(self, allies, enemies, type_=None):
         """ Check passive skills """
@@ -688,7 +630,6 @@ class BaseCreature(object):
         def has_ammo(weapons):
             if weapons is None:
                 return None
-
             w = [attack for attack in weapons if attack.ammo > 0]
             if not w:
                 return None
@@ -697,8 +638,8 @@ class BaseCreature(object):
         def has_min_range(weapons):
             if weapons is None:
                 return None
-
-            w = [attack for attack in weapons if attack.min_distance <= distance_to_target]
+            w = [attack for attack in weapons
+                 if attack.min_distance <= distance_to_target]
             if not w:
                 return None
             return w
@@ -728,10 +669,14 @@ class BaseCreature(object):
             for weapon in weapons:
                 weapon.uses_per_turn = weapon.max_uses_per_turn
 
+        if not [w for w in weapons if w.uses_per_turn != 0]:
+            for weapon in weapons:
+                print(weapon.uses_per_turn, weapon)
+
         self.active_weapon = random.choice([w for w in weapons if w.uses_per_turn != 0])
 
     def act(self, allies, enemies):
-        """ Routine for actions that utilizes given behavior class """
+        """ Routine for actions that utilize given behavior class """
         world.Map.remove(self)
         self.check_passives(allies, enemies, type_="initial")
         if not self.is_dead and not self.is_incapacitated:
@@ -795,9 +740,13 @@ class Party:
     def get_weakest(self):
         """ Pick weakest creature (HP-wise)
         :rtype BaseCreature or None """
-        weakest = sorted(self.remove_dead(self.members),
-                         key=operator.attrgetter('hp'),
-                         reverse=False)[0]
+        try:
+            weakest = sorted(self.remove_dead(self.members),
+                             key=operator.attrgetter('hp'),
+                             reverse=False)[0]
+        except IndexError:
+            return None
+
         if weakest:
             return weakest
         return None
@@ -826,7 +775,7 @@ class Party:
             return other, self
 
     def combine_and_sort_by(self, other, value="name", strongest_first=True):
-        """ Reorder party by given creature variable """
+        """ Reorder creatures in two parties by given creature variable """
         all_creatures = self.members + other.members
         return sorted(all_creatures,
                       key=operator.attrgetter(value),

@@ -38,7 +38,6 @@ class Encounter:
 
                 """ Allow only living creatures to act """
                 if self.party1.is_alive and self.party2.is_alive:
-                    # creature.perform_action(allies, enemies)
                     creature.act(allies, enemies)
 
                 """ Count turns only for living creatures """
@@ -49,7 +48,7 @@ class Encounter:
 
             """ Interrupt fight at 100 rounds (e.g. if two creatures
             are left and they cannot kill each other """
-            if round == 100:
+            if round == 1000:
                 break
 
         world.Map.reset_map()
@@ -74,7 +73,7 @@ matches = 1
 
 i = 0
 results = []
-messages.VERBOSE_LEVEL = 4
+messages.VERBOSE_LEVEL = 3
 
 statisticsA = defaultdict(list)
 statisticsB = defaultdict(list)
@@ -86,59 +85,11 @@ while i < matches:
         print("Match %i" % i)
 
     team1 = Party(name='Team A')
-    team1.add(copy.deepcopy(tarrasque))
-
+    team1.add(copy.deepcopy(giant_crocodile))
     team1.set_formation((0, 3, 0))
 
     team2 = Party(name='Team B')
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
-    team2.add(copy.deepcopy(ogno))
+    team2.add(copy.deepcopy(orc))
 
     team2.set_formation((0, -3, 0))
 

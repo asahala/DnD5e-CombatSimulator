@@ -161,7 +161,7 @@ class MummyRot(Poison):
             elif self.damage_type in target.resistances:
                 multi = 0.5
             else:
-                target.take_max_hp_damage(source, 10*multi, self.name)
+                target.take_max_hp_damage(source, {'necrotic': 10*multi}, self.name)
                 target.prevent_heal = True
                 target.immunities.append(self.name)
                 source.damage_dealt += 10*multi
