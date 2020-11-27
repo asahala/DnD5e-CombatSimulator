@@ -12,9 +12,10 @@ import world
 import messages
 from mechanics import DnDRuleset as R
 
+""" asahala 2020  
+https://github.com/asahala/DnD5e-CombatSimulator/ """
+
 TOTALTIME = 0
-
-
 
 class BaseCreature(object):
 
