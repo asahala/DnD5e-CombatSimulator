@@ -3,6 +3,8 @@ import messages
 import world
 from mechanics import DnDRuleset as R
 
+""" asahala 2020  
+https://github.com/asahala/DnD5e-CombatSimulator/ """
 
 class Ability:
     """ Base class for special creature actions and abilities
