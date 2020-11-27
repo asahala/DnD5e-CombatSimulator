@@ -4,6 +4,9 @@ from collections import Counter, defaultdict
 from creature import Party
 from definitions import *
 
+""" asahala 2020  
+https://github.com/asahala/DnD5e-CombatSimulator/ """
+
 class Encounter:
 
     def __init__(self, party1, party2):
