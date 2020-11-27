@@ -4,6 +4,10 @@ from abilities import *
 from creature import BaseCreature
 from weapons import Weapon, MultiWeapon
 
+""" asahala 2020
+https://github.com/asahala/DnD5e-CombatSimulator/
+"""
+
 """ ================================================================ """
 """ ==================== GENERAL TYPE DEFS ========================= """
 """ ================================================================ """
