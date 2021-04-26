@@ -7,7 +7,7 @@ A (Python 3.6) script for simulating Dungeons & Dragons 5th edition encounters b
 This script is mainly created as a DM tool for simulating encounters between different types of creatures. Want to know how a level 8 Barbarian with a magical Greataxe +2 and his Dire Wolf companion can stand against a Mammoth? How about a Purple Worm vs. 30 zombies? Just run the script and see.
 
 ## Features
-- Movement in three-dimensional world (flying/burrowing not yet implemented)
+- Movement in two-dimensional world (flying/burrowing not yet implemented)
 - Possibility to create battles between parties of arbitrary size
 - Create approximations of player characters by combining already defined creature, ability and weapon objects (see *definitions.py*)
 - Most of the crucial D&D mechanics defined
