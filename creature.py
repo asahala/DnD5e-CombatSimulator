@@ -459,7 +459,7 @@ class BaseCreature(object):
         self.first_attack = True
 
     def heal(self, amount, spellname):
-        if not self.prevent_heal:
+        if not self.prevent_heal and self.hp < self.max_hp:
             self.hp += amount
             if self.hp > self.max_hp:
                 self.hp = self.max_hp
