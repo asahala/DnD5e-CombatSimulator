@@ -202,11 +202,19 @@ class Stomach:
             self.regurgitate()
             self.damage_count = 0
         else:
+            dissolved = set()
             for target in self.contents:
                 messages.IO.reset()
                 messages.IO.log += "{source} digests {target}.".format(
                     source=source.name, target=target.name)
                 R.roll_damage(source, target, self)
+                """ If target dies, dissolve it """
+                if target.is_dead:
+                    dissolved.add(target)
+
+            """ Destroy dissolved targets """
+            for target in dissolved:
+                self.contents.remove(target)
 
 
 """ ================================================================ """

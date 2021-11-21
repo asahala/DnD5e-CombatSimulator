@@ -72,28 +72,36 @@ class Encounter:
 #    if isinstance(value, BaseCreature):
 #        print(name)
 
-matches = 1
+matches = 50
 
 i = 0
 results = []
-messages.VERBOSE_LEVEL = 3
+messages.VERBOSE_LEVEL = 0
 
 statisticsA = defaultdict(list)
 statisticsB = defaultdict(list)
 
-stat_order = ['avg. lifetime', 'avg. dmg', 'kills', 'deaths', 'suicides', 'hits', 'misses']
+stat_order = ['avg. lifet.', 'avg. dmg', 'kills', 'deaths', 'suicides', 'hits', 'misses']
 
 while i < matches:
     if i in range(0, matches, max(int(matches/10), 1)):
         print("Match %i" % i)
 
     team1 = Party(name='Team A')
+    team1.add(copy.deepcopy(troll))
+    team1.add(copy.deepcopy(troll))
+    team1.add(copy.deepcopy(troll))
+    team1.add(copy.deepcopy(troll))
     team1.add(copy.deepcopy(giant_crocodile))
+
     team1.set_formation((0, 3, 0))
 
     team2 = Party(name='Team B')
-    team2.add(copy.deepcopy(orc))
-
+    team2.add(copy.deepcopy(purple_worm))
+    team2.add(copy.deepcopy(purple_worm))
+    team2.add(copy.deepcopy(purple_worm))
+    team2.add(copy.deepcopy(mammoth))
+    team2.add(copy.deepcopy(skeleton))
     team2.set_formation((0, -3, 0))
 
     x = Encounter(team1, team2)

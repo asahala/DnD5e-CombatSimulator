@@ -498,12 +498,19 @@ class BaseCreature(object):
         messages.IO.target_name = self.name
         messages.IO.printlog()
 
+        """ If creature dies, prevent healing it and purge its stomach """
         if self.is_dead:
             self.deaths += 1
+            self.prevent_heal = True
+
+            if self.stomach is not None:
+                self.stomach.regurgitate()
+            
             if source != self:
                 source.kills += 1
             else:
                 self.suicides += 1
+                
             messages.IO.printmsg("-> %s is dead. " % self.name, 2, True, False)
             world.Map.remove(self)
             world.Map.statics[self.position] = ' † '
@@ -550,6 +557,7 @@ class BaseCreature(object):
     def attack(self):
         """ Set focus on enemy and attack it """
 
+        #if not self.focused_enemy.is_dead:
         self.active_weapon.use(self, self.focused_enemy)
         self.active_weapon.ammo -= 1
         self.first_attack = False

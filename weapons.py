@@ -46,8 +46,9 @@ class Weapon(object):
             #total_damage = R.iterate_damage(source, target, self, crit_multiplier)
             total_damage = R.roll_damage(source, target, self, crit_multiplier)
 
-            """ Apply weapon's special abilities on target"""
-            if self.special:
+            """ Apply weapon's special abilities on target unless the target is
+            already dead """
+            if self.special and not target.is_dead:
                 for on_hit_effect in self.special:
                     on_hit_effect.use(source, target, total_damage, crit_multiplier)
 
