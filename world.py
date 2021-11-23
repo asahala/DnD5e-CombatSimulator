@@ -5,7 +5,12 @@ import messages
 
 """ D&D 5e Combat Simulator battle grid ============================ """
 
-symbols = {'Team A': ' ° ', 'Team B': ' * '}
+""" Team names """
+
+TEAM_A = 'Team North'
+TEAM_B = 'Team South'
+
+symbols = {TEAM_A: ' ° ', TEAM_B: ' * '}
 
 class Map:
 
@@ -359,7 +364,7 @@ def print_coords(size=15):
                 symbol = Map.statics.get(pos, Map.paths.get(pos, " · "))
                 override = Map.occupied.get(pos, None)
                 if override is not None:
-                    if override.party == "Team A":
+                    if override.party == TEAM_A:
                         symbol = override.name[0:2] + override.name[-1]
                     else:
                         symbol = override.name[0:2].lower() + override.name[-1].lower()
