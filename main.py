@@ -1,11 +1,27 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
 import messages
 import world
 from collections import Counter, defaultdict
 from creature import Party
 from definitions import *
 
-""" asahala 2020  
-https://github.com/asahala/DnD5e-CombatSimulator/ """
+__version__ = "2021-11-23"
+
+""" Dungeons and Dragons 5 combat simulator :: asahala 2020-2021
+
+  https://github.com/asahala/DnD5e-CombatSimulator/
+
+  Simulates D&D5 battles between groups of creatures. Call function
+  list_creatures() from this script to get list of creatures. Object
+  names are given between grave accents in the rightmost column.
+
+  Pass lists of creature objects into simulate() as arguments `team_a`
+  and `team_b` to simulate battles. Currently only battles between
+  two teams are supported.
+  
+"""
 
 class Encounter:
 
@@ -51,7 +67,7 @@ class Encounter:
 
             """ Interrupt fight at 100 rounds (e.g. if two creatures
             are left and they cannot kill each other """
-            if round_ == 1000:
+            if round_ == 100:
                 break
 
         world.Map.reset_map()
@@ -76,10 +92,25 @@ def list_creatures():
             print(value, '| `'+name+'`', sep='\t')
     print('='*64)
     
-#list_creatures()
-
 
 def simulate(matches=1, verbose=0, team_a=[], team_b=[]):
+    """ :param matches            number of simulated battles
+        :param verbose            verbose level
+
+                                       0 = only final outcome
+                                       1 = not implemented
+                                       2 = logs turn-by-turn
+                                       3 = logs and battle grid
+                                       
+        :param team_a             list of creatures  
+        :param team_b             list of creatures
+
+        :type matches             int
+        :type verbose             int
+        :type team_a              [BaseCreature, ...]
+        :type team_b              [BaseCreature, ...]
+
+    """
 
     if verbose != 0 and matches > 1:
         verbose = 0
@@ -133,7 +164,7 @@ def simulate(matches=1, verbose=0, team_a=[], team_b=[]):
 
     print('\n')
     x = dict(Counter(results).items())
-    print('SIMULATION OVERVIEW')
+    print('SIMULATION SUMMARY')
     print('=='*40)
     for k, v in Counter(results).items():
         print('{team} wins {rate}% of the matches'.format(team=k, rate=100*x[k]/matches))
@@ -171,8 +202,9 @@ def simulate(matches=1, verbose=0, team_a=[], team_b=[]):
         tabulate(stat_order, table, keys, t.pop(0))
 
 
-if __name__ == "__main__":    
-    simulate(matches=100,
+if __name__ == "__main__":
+    #list_creatures()
+    simulate(matches=50,
              verbose=0,
              team_a=[brown_bear, black_bear, dire_wolf],
              team_b=[mummy, zombie, skeleton])
