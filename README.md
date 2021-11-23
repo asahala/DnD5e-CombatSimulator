@@ -26,3 +26,4 @@ Creature behavior is very straightforward. Thus the results are not always compa
 - Flying and burrowing
 - More creatures
 - Perhaps a more interactive UI (TkInter etc.)
+- Implement creature size on the map (now all take same amount of space)
