@@ -7,7 +7,7 @@ A (Python 3.6) script for simulating Dungeons & Dragons 5th edition encounters b
 This script is mainly created as a DM tool for simulating encounters between different types of creatures. Want to know how a level 8 Barbarian with a magical Greataxe +2 and his Dire Wolf companion can stand against a Mammoth? How about a Purple Worm vs. 30 zombies? Just run the script and see.
 
 ## How to use
-Run ```simulate()``` function in ```main.py```. You can get a list of implemented creatures by calling function ```list_creatures()```.
+Run ```simulate()``` function in ```main.py```. You can get a list of implemented creatures by calling function ```list_creatures()```. More documentation in ```main.py```
 
 ## Features
 - Movement in two-dimensional world (flying/burrowing not yet implemented)
@@ -20,3 +20,9 @@ Creature behavior is very straightforward. Thus the results are not always compa
 
 ## Known bugs
 - If a creature has swallowed other creatures and dies, the swallowed creatures end up in the same coordinates.
+
+## TODO
+- Spell casting
+- Flying and burrowing
+- More creatures
+- Perhaps a more interactive UI (TkInter etc.)
