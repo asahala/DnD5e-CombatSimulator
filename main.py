@@ -9,7 +9,7 @@ from creature import Party
 from definitions import Creatures as npc
 from definitions import PlayerCharacters as pc
 
-__version__ = "2021-11-23"
+__version__ = "2021-11-24"
 
 DIV = '='*64
 
@@ -225,6 +225,6 @@ def simulate(matches=1, verbose=0, team_a=[], team_b=[]):
 if __name__ == "__main__":
     #list_creatures()
     simulate(matches=100,
-             verbose=1,
-             team_a=[pc.ogno],
-             team_b=[npc.kobold, npc.goblin, npc.skeleton])
+             verbose=0,
+             team_a=[npc.troll]*2,
+             team_b=[pc.ogno])

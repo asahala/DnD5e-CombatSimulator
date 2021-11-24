@@ -1,3 +1,4 @@
+import copy
 import behavior
 from abilities import *
 from creature import BaseCreature
@@ -67,6 +68,9 @@ fear = 'fear'
 """ ================================================================ """
 """ ========================== WEAPONS ============================= """
 """ ================================================================ """
+""" Note that you should use copy.deepcopy(weapon) for ranged weapons
+    to prevent them using same ammo pool!
+"""
 
 greatclub = Weapon(name='greatclub', damage=["3d8+6"],
                    damage_type=[bludgeoning], reach=15, to_hit=9)
@@ -323,6 +327,25 @@ class Creatures:
                                                               to_hit=5,
                                                               uses_per_turn=1)]})
 
+    bugbear = BaseCreature(name='bugbear', cr=1, ac=16, hp=27, speed=30,
+                       size=medium,
+                       category=humanoid,
+                       ai=behavior.Standard,
+                       # Surprise attack undefined
+                       # Brute hardcoded into weapon 
+                       scores={'str': 15, 'dex': 14, 'con': 13,
+                               'int': 8, 'wis': 11, 'cha': 9},
+                       melee_attacks={'basic': [
+                           Weapon(name='morningstar', damage=["2d8+2"],
+                                  damage_type=[piercing], reach=5,
+                                  to_hit=4)]},
+                       ranged_attacks={'basic': [
+                           Weapon(name='javelin', damage=["1d6+2"],
+                                  damage_type=[piercing], reach=30,
+                                  ranged=True,
+                                  ammo=5,
+                                  to_hit=4)]})
+
     crocodile = BaseCreature(name='crocodile', cr=0.5, ac=12, hp=19, speed=20,
                              size=large,
                              category=beast,
@@ -394,7 +417,7 @@ class Creatures:
                            Weapon(name='scimitar', damage=["1d6+2"],
                                   damage_type=[slashing], reach=5,
                                   to_hit=4)]},
-                       ranged_attacks={'basic': [shortbow]})
+                       ranged_attacks={'basic': [copy.deepcopy(shortbow)]})
     
     kobold = BaseCreature(name='kobold', cr=0.125, ac=12, hp=5, speed=30,
                        size=small,
@@ -595,7 +618,7 @@ class Creatures:
                                                        damage_type=[slashing],
                                                        reach=5,
                                                        to_hit=4)]},
-                            ranged_attacks={'basic': [shortbow]})
+                            ranged_attacks={'basic': [copy.deepcopy(shortbow)]})
 
     stone_giant = BaseCreature(name='stone giant', cr=7, ac=17, hp=126, speed=40,
                                size=large,

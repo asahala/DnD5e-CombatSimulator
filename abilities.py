@@ -130,8 +130,8 @@ class Poison(Ability):
     def use(self, source, target, total_damage=0, crit_multipiler=1):
 
         messages.IO.reset()
-        messages.IO.log += "{source} on-hit effect on {target}.".format(source=source.name, target=target.name)
-
+        messages.IO.log += f"{source.name} on-hit effect on {target.name}."
+        
         save_success = R.roll_save(target, self.save, self.dc)
 
         if self.damage is not None:
@@ -183,6 +183,10 @@ class Stomach:
 
     """ Stomach for creatures that can swallow other creatures """
 
+    ## handle swallowing creatures that have swallowed other creatures
+    ## regurgitation also spawns creatures to the same coordinates with
+    ## the swallower!
+
     def __init__(self, name, damage, damage_type, breakout_dmg, breakout_dc):
         self.name = name
         self.contents = []
@@ -218,7 +222,7 @@ class Stomach:
 
 
 """ ================================================================ """
-""" ======================= PASSIvE ABILITIES ====================== """
+""" ======================= PASSIVE ABILITIES ====================== """
 """ ================================================================ """
 
 class FrightfulPresence(Ability):

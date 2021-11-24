@@ -784,14 +784,14 @@ class Party:
             return other, self
 
     def combine_and_sort_by(self, other, value="name", strongest_first=True):
-        """ Reorder creatures in two parties by given creature variable """
+        """ Reorder creatures in two parties by a given creature variable """
         all_creatures = self.members + other.members
         return sorted(all_creatures,
                       key=operator.attrgetter(value),
                       reverse=strongest_first)
 
     def sort_by(self, value="name", strongest_first=True):
-        """ Reorder party by given creature variable """
+        """ Reorder party by a given creature variable """
         self.members.sort(key=operator.attrgetter(value),
                           reverse=strongest_first)
 
