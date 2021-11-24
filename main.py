@@ -1,13 +1,17 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+import copy
 import messages
 import world
 from collections import Counter, defaultdict
 from creature import Party
-from definitions import *
+from definitions import Creatures as npc
+from definitions import PlayerCharacters as pc
 
 __version__ = "2021-11-23"
+
+DIV = '='*64
 
 """ Dungeons and Dragons 5 combat simulator :: asahala 2020-2021
 
@@ -16,6 +20,8 @@ __version__ = "2021-11-23"
   Simulates D&D5 battles between groups of creatures. Call function
   list_creatures() from this script to get list of creatures. Object
   names are given between grave accents in the rightmost column.
+
+  Use prefix npc with creatures, e.g. npc.zombie, npc.black_bear.
 
   Pass lists of creature objects into simulate() as arguments `team_a`
   and `team_b` to simulate battles. Currently only battles between
@@ -83,15 +89,28 @@ class Encounter:
             messages.IO.printmsg("\n%s wins!" % self.party2.name, level=1)
             return self.party2.name
 
+#def list_creatures_():
+#    """ Call this function to list all defined creatures """
+#    print('List of creatures')
+#    print('='*64)
+#    for name, value in sorted(globals().copy().items()):
+#        if isinstance(value, BaseCreature):
+#            print(value, '| `'+name+'`', sep='\t')
+#    print('='*64)
+
+
 def list_creatures():
     """ Call this function to list all defined creatures """
-    print('List of creatures')
-    print('='*64)
-    for name, value in sorted(globals().copy().items()):
-        if isinstance(value, BaseCreature):
-            print(value, '| `'+name+'`', sep='\t')
-    print('='*64)
-    
+
+    for category in [('npc', npc), ('pc', pc)]:
+        print(DIV)
+        print({'npc': 'Creatures', 'pc': 'Player Characters'}[category[0]])
+        print(DIV)
+        for k, v in vars(category[-1]).items():
+            if not k.startswith('__'):
+                print(v, f'| `{category[0]}.{k}`', sep='\t')
+    print(DIV)
+
 
 def simulate(matches=1, verbose=0, team_a=[], team_b=[]):
     """ :param matches            number of simulated battles
@@ -99,8 +118,9 @@ def simulate(matches=1, verbose=0, team_a=[], team_b=[]):
 
                                        0 = only final outcome
                                        1 = not implemented
-                                       2 = logs turn-by-turn
-                                       3 = logs and battle grid
+                                       2 = logs without moves
+                                       3 = logs with moves
+                                       4 = logs and battle grid
                                        
         :param team_a             list of creatures  
         :param team_b             list of creatures
@@ -182,7 +202,7 @@ def simulate(matches=1, verbose=0, team_a=[], team_b=[]):
         print('\n')
 
 
-    #fix this later
+    #fix this temporary gimmick later
     t = [world.TEAM_A, world.TEAM_B]
     
     for statistics in [statisticsA, statisticsB]:
@@ -204,9 +224,7 @@ def simulate(matches=1, verbose=0, team_a=[], team_b=[]):
 
 if __name__ == "__main__":
     #list_creatures()
-    simulate(matches=50,
-             verbose=0,
-             team_a=[brown_bear, black_bear, dire_wolf],
-             team_b=[mummy, zombie, skeleton])
-
-    
+    simulate(matches=100,
+             verbose=1,
+             team_a=[pc.ogno],
+             team_b=[npc.kobold, npc.goblin, npc.skeleton])
